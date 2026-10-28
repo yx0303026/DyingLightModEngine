@@ -2,7 +2,7 @@
 #include <mmsystem.h>
 #include <dsound.h>
 
-#include "dsound_proxy_runtime.h"
+#include "DsoundProxyRuntime.h"
 
 namespace {
 

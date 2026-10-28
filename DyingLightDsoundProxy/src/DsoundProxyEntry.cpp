@@ -1,4 +1,4 @@
-#include "dsound_proxy_runtime.h"
+#include "DsoundProxyRuntime.h"
 
 extern "C" BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID)
 {

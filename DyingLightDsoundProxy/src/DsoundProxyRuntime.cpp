@@ -1,4 +1,4 @@
-#include "dsound_proxy_runtime.h"
+#include "DsoundProxyRuntime.h"
 
 #include <array>
 #include <string>
@@ -56,15 +56,15 @@ BOOL CALLBACK InitializeProxy(PINIT_ONCE, PVOID, PVOID*)
 
     g_runtime.modEngine = LoadModEngine();
     if (g_runtime.modEngine == nullptr) {
-        OutputDebugStringA("[DyingLightDsoundProxy] DyingLightModEngine.dll was not found beside dsound.dll\n");
+        OutputDebugStringA("[DyingLightDsoundProxy] ModEngine.dll was not found beside dsound.dll\n");
         return TRUE;
     }
 
     using InitializeEngineFn = HRESULT(WINAPI*)(void);
     const auto initializeEngine = reinterpret_cast<InitializeEngineFn>(
-        GetProcAddress(g_runtime.modEngine, "DyingLightModEngine_Initialize"));
+        GetProcAddress(g_runtime.modEngine, "ModEngineInitialize"));
     if (initializeEngine == nullptr || FAILED(initializeEngine())) {
-        OutputDebugStringA("[DyingLightDsoundProxy] DyingLightModEngine initialization failed\n");
+        OutputDebugStringA("[DyingLightDsoundProxy] ModEngine initialization failed\n");
         FreeLibrary(g_runtime.modEngine);
         g_runtime.modEngine = nullptr;
     }

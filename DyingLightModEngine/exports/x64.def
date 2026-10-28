@@ -1,5 +1,5 @@
 LIBRARY DyingLightModEngine
 EXPORTS
     ModSDK_QueryApi
-    DyingLightModEngine_Initialize
-    DyingLightModEngine_Shutdown
+    ModEngineInitialize
+    ModEngineShutdown

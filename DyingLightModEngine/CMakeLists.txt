@@ -9,6 +9,53 @@ endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/../cmake/DyingLightOutputDirectories.cmake")
 
+include(FetchContent)
+
+FetchContent_Declare(
+    DearImGui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG v1.93.0
+    GIT_SHALLOW TRUE
+)
+FetchContent_GetProperties(DearImGui)
+if(NOT dearimgui_POPULATED)
+    FetchContent_Populate(DearImGui)
+endif()
+
+add_library(DearImGui STATIC
+    "${dearimgui_SOURCE_DIR}/imgui.cpp"
+    "${dearimgui_SOURCE_DIR}/imgui_draw.cpp"
+    "${dearimgui_SOURCE_DIR}/imgui_tables.cpp"
+    "${dearimgui_SOURCE_DIR}/imgui_widgets.cpp"
+)
+target_include_directories(DearImGui PUBLIC
+    "${dearimgui_SOURCE_DIR}"
+    "${CMAKE_CURRENT_LIST_DIR}/imgui/include"
+)
+target_compile_features(DearImGui PUBLIC cxx_std_11)
+
+add_library(DyingLightModEngineImGui STATIC
+    "imgui/src/ui.cpp"
+    "imgui/src/layout.cpp"
+    "imgui/src/controls.cpp"
+    "imgui/src/navigation.cpp"
+    "imgui/include/dl_imgui/ui.h"
+    "imgui/include/dl_imgui/layout.h"
+    "imgui/include/dl_imgui/controls.h"
+    "imgui/include/dl_imgui/navigation.h"
+    "imgui/include/dl_imgui/imgui.h"
+    "imgui/include/imconfig.h"
+)
+add_library(DyingLightModEngine::ImGui ALIAS DyingLightModEngineImGui)
+target_compile_features(DyingLightModEngineImGui PUBLIC cxx_std_20)
+target_include_directories(DyingLightModEngineImGui
+    PUBLIC
+        "${CMAKE_CURRENT_LIST_DIR}/imgui/include"
+        "${dearimgui_SOURCE_DIR}"
+)
+target_compile_options(DyingLightModEngineImGui PRIVATE /W4 /permissive- /EHsc)
+target_link_libraries(DyingLightModEngineImGui PUBLIC DearImGui)
+
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     set(DLMOD_ENGINE_DEF "${CMAKE_CURRENT_LIST_DIR}/exports/x64.def")
 elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
@@ -18,23 +65,26 @@ else()
 endif()
 
 add_library(DyingLightModEngine SHARED
-    "src/dl_mod_engine_entry.cpp"
-    "src/dl_mod_engine_host.cpp"
-    "src/dl_mod_engine_api.cpp"
-    "src/dl_mod_engine_logger.cpp"
-    "src/mod_manager.cpp"
-    "include/dl_mod_engine_host.h"
-    "include/ModSDK.h"
-    "include/modsdk_abi.h"
-    "include/modsdk_logger.h"
-    "include/modsdk_mod_manager.h"
+    "src/ModEngineEntry.cpp"
+    "src/ModEngineHost.cpp"
+    "src/ModEngineApi.cpp"
+    "src/EngineLogger.cpp"
+    "src/EngineModManager.cpp"
+    "include/EngineHost.h"
+    "include/EngineAbi.h"
+    "include/EngineLogger.h"
+    "include/EngineModManager.h"
+    "include/abis/file_system/PakLoaderAbi.h"
     "${DLMOD_ENGINE_DEF}"
 )
 
 target_compile_features(DyingLightModEngine PRIVATE cxx_std_20)
 target_compile_definitions(DyingLightModEngine PRIVATE MODSDK_BUILD WIN32_LEAN_AND_MEAN NOMINMAX)
-target_include_directories(DyingLightModEngine PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
+target_include_directories(DyingLightModEngine
+    PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include"
+)
 target_compile_options(DyingLightModEngine PRIVATE /W4 /permissive- /EHsc)
+target_link_libraries(DyingLightModEngine PRIVATE DyingLightModEngineImGui)
 set_target_properties(DyingLightModEngine PROPERTIES OUTPUT_NAME "DyingLightModEngine")
 
 dlmod_set_output_directories(DyingLightModEngine)

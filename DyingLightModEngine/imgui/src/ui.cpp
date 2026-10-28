@@ -1,0 +1,239 @@
+#include "dl_imgui/ui.h"
+
+#include <algorithm>
+#include <stdexcept>
+
+namespace dl::imgui {
+	namespace {
+
+		class StyleScope {
+		public:
+			explicit StyleScope(const Style& style)
+			{
+				if (style.hasTextColor) {
+					ImGui::PushStyleColor(ImGuiCol_Text, style.textColor);
+					++colorCount_;
+				}
+				if (style.hasWindowBackground) {
+					ImGui::PushStyleColor(ImGuiCol_WindowBg, style.windowBackground);
+					++colorCount_;
+				}
+				if (style.hasFrameBackground) {
+					ImGui::PushStyleColor(ImGuiCol_FrameBg, style.frameBackground);
+					++colorCount_;
+				}
+				if (style.hasButtonColor) {
+					ImGui::PushStyleColor(ImGuiCol_Button, style.buttonColor);
+					++colorCount_;
+				}
+				if (style.hasButtonHoveredColor) {
+					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, style.buttonHoveredColor);
+					++colorCount_;
+				}
+				if (style.hasButtonActiveColor) {
+					ImGui::PushStyleColor(ImGuiCol_ButtonActive, style.buttonActiveColor);
+					++colorCount_;
+				}
+				if (style.frameRounding >= 0.0F) {
+					ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, style.frameRounding);
+					++styleCount_;
+				}
+				if (style.itemSpacing >= 0.0F) {
+					ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(style.itemSpacing, style.itemSpacing));
+					++styleCount_;
+				}
+			}
+
+			~StyleScope()
+			{
+				ImGui::PopStyleVar(styleCount_);
+				ImGui::PopStyleColor(colorCount_);
+			}
+
+		private:
+			int colorCount_ = 0;
+			int styleCount_ = 0;
+		};
+
+		void RenderMargin(const Thickness& margin)
+		{
+			if (margin.left > 0.0F || margin.top > 0.0F) {
+				ImGui::Dummy(ImVec2(margin.left, margin.top));
+			}
+		}
+
+		void RenderTrailingMargin(const Thickness& margin)
+		{
+			if (margin.right > 0.0F || margin.bottom > 0.0F) {
+				ImGui::Dummy(ImVec2(margin.right, margin.bottom));
+			}
+		}
+
+	} // namespace
+
+	UIElement::~UIElement() = default;
+
+	void UIElement::Render()
+	{
+		if (visibility_ == Visibility::Collapsed) {
+			return;
+		}
+
+		ImGui::PushID(id_.empty() ? static_cast<const void*>(this) : id_.c_str());
+		StyleScope styleScope(style_);
+		RenderMargin(layout_.margin);
+		if (visibility_ == Visibility::Visible) {
+			OnRender();
+    } else {
+        ImGui::Dummy(ResolveSize(ImVec2(0.0F, 0.0F)));
+		}
+		RenderTrailingMargin(layout_.margin);
+		ImGui::PopID();
+	}
+
+	Visibility UIElement::GetVisibility() const noexcept
+	{
+		return visibility_;
+	}
+
+	void UIElement::SetVisibility(Visibility visibility) noexcept
+	{
+		visibility_ = visibility;
+	}
+
+	const std::string& UIElement::GetId() const noexcept
+	{
+		return id_;
+	}
+
+	void UIElement::SetId(std::string id)
+	{
+		id_ = std::move(id);
+	}
+
+	const LayoutOptions& UIElement::GetLayout() const noexcept
+	{
+		return layout_;
+	}
+
+	void UIElement::SetLayout(const LayoutOptions& layout)
+	{
+		layout_ = layout;
+	}
+
+	const Style& UIElement::GetStyle() const noexcept
+	{
+		return style_;
+	}
+
+	void UIElement::SetStyle(const Style& style)
+	{
+		style_ = style;
+	}
+
+	void UIElement::RenderChild(UIElement& child)
+	{
+		child.Render();
+	}
+
+	ImVec2 UIElement::ResolveSize(const ImVec2& fallback) const noexcept
+	{
+		return ImVec2(
+			layout_.width >= 0.0F ? layout_.width : fallback.x,
+			layout_.height >= 0.0F ? layout_.height : fallback.y);
+	}
+
+	UIElement& Component::AddChild(std::unique_ptr<UIElement> child)
+	{
+		if (child == nullptr) {
+			throw std::invalid_argument("Component child cannot be null");
+		}
+		UIElement& reference = *child;
+		children_.push_back(std::move(child));
+		return reference;
+	}
+
+	void Component::RemoveAllChildren()
+	{
+		children_.clear();
+	}
+
+	const std::vector<std::unique_ptr<UIElement>>& Component::GetChildren() const noexcept
+	{
+		return children_;
+	}
+
+	void Component::OnRender()
+	{
+		for (const auto& child : children_) {
+			RenderChild(*child);
+		}
+	}
+
+	std::vector<std::unique_ptr<UIElement>>& Component::Children() noexcept
+	{
+		return children_;
+	}
+
+	void Panel::OnRender()
+	{
+		Component::OnRender();
+	}
+
+	UiContext::~UiContext()
+	{
+		Destroy();
+	}
+
+	bool UiContext::Create()
+	{
+		if (context_ != nullptr) {
+			return false;
+		}
+		context_ = ImGui::CreateContext();
+		return context_ != nullptr;
+	}
+
+	void UiContext::Destroy() noexcept
+	{
+		if (context_ != nullptr) {
+			ImGui::DestroyContext(context_);
+			context_ = nullptr;
+		}
+	}
+
+	bool UiContext::IsCreated() const noexcept
+	{
+		return context_ != nullptr;
+	}
+
+	ImGuiContext* UiContext::GetNativeContext() const noexcept
+	{
+		return context_;
+	}
+
+	void UiContext::BeginFrame()
+	{
+		if (context_ != nullptr) {
+			ImGui::SetCurrentContext(context_);
+			ImGui::NewFrame();
+		}
+	}
+
+	void UiContext::Render(UIElement& root)
+	{
+		if (context_ != nullptr) {
+			ImGui::SetCurrentContext(context_);
+			root.Render();
+		}
+	}
+
+	void UiContext::EndFrame()
+	{
+		if (context_ != nullptr) {
+			ImGui::SetCurrentContext(context_);
+			ImGui::Render();
+		}
+	}
+
+} // namespace dl::imgui

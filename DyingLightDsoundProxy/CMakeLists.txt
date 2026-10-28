@@ -18,10 +18,10 @@ else()
 endif()
 
 add_library(DyingLightDsoundProxy SHARED
-    "src/dsound_proxy.cpp"
-    "src/dsound_proxy_entry.cpp"
-    "src/dsound_proxy_runtime.cpp"
-    "include/dsound_proxy_runtime.h"
+    "src/DsoundProxy.cpp"
+    "src/DsoundProxyEntry.cpp"
+    "src/DsoundProxyRuntime.cpp"
+    "include/DsoundProxyRuntime.h"
     "${DLMOD_DSOUND_DEF}"
 )
 
