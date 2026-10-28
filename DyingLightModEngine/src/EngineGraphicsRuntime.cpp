@@ -50,7 +50,7 @@ bool EngineGraphicsRuntime::CreateDummySwapChain() noexcept
 	WNDCLASSEXW windowClass{};
 	windowClass.cbSize = sizeof(windowClass);
 	windowClass.hInstance = instance;
-	windowClass.lpfnWndProc = &WindowProc;
+	windowClass.lpfnWndProc = &DefWindowProcW;
 	windowClass.lpszClassName = kWindowClassName;
 	if (RegisterClassExW(&windowClass) == 0) {
 		if (GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
