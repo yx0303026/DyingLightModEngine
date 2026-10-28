@@ -21,18 +21,19 @@ add_library(DyingLightDsoundProxy SHARED
     "src/dsound_proxy.cpp"
     "src/dsound_proxy_entry.cpp"
     "src/dsound_proxy_runtime.cpp"
-    "src/dsound_proxy_runtime.h"
+    "include/dsound_proxy_runtime.h"
     "${DLMOD_DSOUND_DEF}"
 )
 
 target_compile_features(DyingLightDsoundProxy PRIVATE cxx_std_20)
 target_compile_definitions(DyingLightDsoundProxy PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX DIRECTSOUND_VERSION=0x0900)
+target_include_directories(DyingLightDsoundProxy PRIVATE "${CMAKE_CURRENT_LIST_DIR}/include")
 target_compile_options(DyingLightDsoundProxy PRIVATE /W4 /permissive- /EHsc)
 target_link_options(DyingLightDsoundProxy PRIVATE /IGNORE:4222)
 set_target_properties(DyingLightDsoundProxy PROPERTIES OUTPUT_NAME "dsound")
 
-if(TARGET DyingLightModLoader)
-    add_dependencies(DyingLightDsoundProxy DyingLightModLoader)
+if(TARGET DyingLightModEngine)
+    add_dependencies(DyingLightDsoundProxy DyingLightModEngine)
 endif()
 
 dlmod_set_output_directories(DyingLightDsoundProxy)

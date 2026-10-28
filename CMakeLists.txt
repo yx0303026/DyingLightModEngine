@@ -13,5 +13,5 @@ project(DyingLightModSuite LANGUAGES CXX)
 
 # 包含子项目。
 add_subdirectory("DyingLightModEngine")
-add_subdirectory("DyingLightModLoader")
 add_subdirectory("DyingLightDsoundProxy")
+add_subdirectory("Mods/ExampleMod")

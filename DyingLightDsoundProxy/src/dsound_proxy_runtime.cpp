@@ -37,13 +37,13 @@ HMODULE LoadSystemDsound()
     return LoadLibraryW(systemPath.c_str());
 }
 
-HMODULE LoadModLoader()
+HMODULE LoadModEngine()
 {
     const std::wstring moduleDirectory = GetModuleDirectory(g_runtime.moduleHandle);
     if (moduleDirectory.empty()) {
         return nullptr;
     }
-    return LoadLibraryW((moduleDirectory + L"DyingLightModLoader.dll").c_str());
+    return LoadLibraryW((moduleDirectory + L"DyingLightModEngine.dll").c_str());
 }
 
 BOOL CALLBACK InitializeProxy(PINIT_ONCE, PVOID, PVOID*)
@@ -54,19 +54,19 @@ BOOL CALLBACK InitializeProxy(PINIT_ONCE, PVOID, PVOID*)
         return TRUE;
     }
 
-    g_runtime.modLoader = LoadModLoader();
-    if (g_runtime.modLoader == nullptr) {
-        OutputDebugStringA("[DyingLightDsoundProxy] DyingLightModLoader.dll was not found beside dsound.dll\n");
+    g_runtime.modEngine = LoadModEngine();
+    if (g_runtime.modEngine == nullptr) {
+        OutputDebugStringA("[DyingLightDsoundProxy] DyingLightModEngine.dll was not found beside dsound.dll\n");
         return TRUE;
     }
 
-    using InitializeLoaderFn = HRESULT(WINAPI*)(void);
-    const auto initializeLoader = reinterpret_cast<InitializeLoaderFn>(
-        GetProcAddress(g_runtime.modLoader, "DyingLightModLoader_Initialize"));
-    if (initializeLoader == nullptr || FAILED(initializeLoader())) {
-        OutputDebugStringA("[DyingLightDsoundProxy] DyingLightModLoader initialization failed\n");
-        FreeLibrary(g_runtime.modLoader);
-        g_runtime.modLoader = nullptr;
+    using InitializeEngineFn = HRESULT(WINAPI*)(void);
+    const auto initializeEngine = reinterpret_cast<InitializeEngineFn>(
+        GetProcAddress(g_runtime.modEngine, "DyingLightModEngine_Initialize"));
+    if (initializeEngine == nullptr || FAILED(initializeEngine())) {
+        OutputDebugStringA("[DyingLightDsoundProxy] DyingLightModEngine initialization failed\n");
+        FreeLibrary(g_runtime.modEngine);
+        g_runtime.modEngine = nullptr;
     }
     return TRUE;
 }

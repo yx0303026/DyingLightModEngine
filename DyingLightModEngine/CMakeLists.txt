@@ -17,18 +17,24 @@ else()
     message(FATAL_ERROR "DyingLightModEngine supports only x86 and x64 Windows targets")
 endif()
 
-add_library(ModSDK SHARED
+add_library(DyingLightModEngine SHARED
+    "src/dl_mod_engine_entry.cpp"
+    "src/dl_mod_engine_host.cpp"
     "src/dl_mod_engine_api.cpp"
     "src/dl_mod_engine_logger.cpp"
-    "include/runtime/modsdk_runtime.h"
+    "src/mod_manager.cpp"
+    "include/dl_mod_engine_host.h"
     "include/ModSDK.h"
+    "include/modsdk_abi.h"
+    "include/modsdk_logger.h"
+    "include/modsdk_mod_manager.h"
     "${DLMOD_ENGINE_DEF}"
 )
 
-target_compile_features(ModSDK PRIVATE cxx_std_20)
-target_compile_definitions(ModSDK PRIVATE MODSDK_BUILD WIN32_LEAN_AND_MEAN NOMINMAX)
-target_include_directories(ModSDK PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
-target_compile_options(ModSDK PRIVATE /W4 /permissive- /EHsc)
-set_target_properties(ModSDK PROPERTIES OUTPUT_NAME "ModSDK")
+target_compile_features(DyingLightModEngine PRIVATE cxx_std_20)
+target_compile_definitions(DyingLightModEngine PRIVATE MODSDK_BUILD WIN32_LEAN_AND_MEAN NOMINMAX)
+target_include_directories(DyingLightModEngine PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
+target_compile_options(DyingLightModEngine PRIVATE /W4 /permissive- /EHsc)
+set_target_properties(DyingLightModEngine PROPERTIES OUTPUT_NAME "DyingLightModEngine")
 
-dlmod_set_sdk_output_directories(ModSDK "${CMAKE_CURRENT_LIST_DIR}")
+dlmod_set_output_directories(DyingLightModEngine)
