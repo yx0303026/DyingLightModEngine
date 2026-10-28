@@ -80,6 +80,7 @@ target_compile_features(DyingLightModEngineImGui PUBLIC cxx_std_20)
 target_include_directories(DyingLightModEngineImGui
     PUBLIC
         "${CMAKE_CURRENT_LIST_DIR}/imgui/include"
+        "${CMAKE_CURRENT_LIST_DIR}/include"
         "${dearimgui_SOURCE_DIR}"
 )
 target_compile_options(DyingLightModEngineImGui PRIVATE /W4 /permissive- /EHsc)

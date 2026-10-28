@@ -10,9 +10,10 @@
  * Games built on DirectInput (Dying Light reads the mouse through
  * IDirectInputDevice8::GetDeviceState) normally never consult window messages or
  * the system cursor. This runtime hooks the DirectInput mouse device when
- * possible, and also accepts WM_INPUT samples as a fallback, suppressing the
- * native state while a mod UI is open and republishing relative motion as a
- * virtual cursor that mods feed into their ImGui backend.
+ * possible, and also hooks GetRawInputData/GetRawInputBuffer plus accepts
+ * WM_INPUT samples as a fallback. While a mod UI is open, native mouse state
+ * is suppressed and relative motion is republished as a virtual cursor that
+ * mods feed into their ImGui backend.
  */
 class EngineDirectInputRuntime final {
 public:

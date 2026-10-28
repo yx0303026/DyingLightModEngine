@@ -200,6 +200,7 @@ namespace dl::imgui {
 			ImGui::DestroyContext(context_);
 			context_ = nullptr;
 		}
+		mouseProviderActive_ = false;
 	}
 
 	bool UiContext::IsCreated() const noexcept
@@ -212,10 +213,51 @@ namespace dl::imgui {
 		return context_;
 	}
 
+	void UiContext::SetMouseStateProvider(ModEngineGetUiMouseStateFn provider) noexcept
+	{
+		mouseStateProvider_ = provider;
+		mouseProviderActive_ = false;
+	}
+
+	bool UiContext::IsMouseProviderActive() const noexcept
+	{
+		return mouseProviderActive_;
+	}
+
+	void UiContext::ApplyMouseState() noexcept
+	{
+		mouseProviderActive_ = false;
+		if (mouseStateProvider_ == nullptr) {
+			return;
+		}
+
+		DlModUiMouseStateV1 state{};
+		state.structSize = sizeof(state);
+		state.abiVersion = MODSDK_ABI_VERSION;
+		if (mouseStateProvider_(&state) == 0U) {
+			return;
+		}
+
+		ImGuiIO& io = ImGui::GetIO();
+		if ((state.flags & DLMOD_UI_MOUSE_POSITION_VALID) != 0U) {
+			io.AddMousePosEvent(
+				static_cast<float>(state.positionX),
+				static_cast<float>(state.positionY));
+		}
+		for (int button = 0; button < 5; ++button) {
+			io.AddMouseButtonEvent(button, (state.buttons & (1U << button)) != 0U);
+		}
+		if (state.wheelDelta != 0.0F) {
+			io.AddMouseWheelEvent(0.0F, state.wheelDelta);
+		}
+		mouseProviderActive_ = true;
+	}
+
 	void UiContext::BeginFrame()
 	{
 		if (context_ != nullptr) {
 			ImGui::SetCurrentContext(context_);
+			ApplyMouseState();
 			ImGui::NewFrame();
 		}
 	}

@@ -32,7 +32,7 @@ namespace cheat_mod {
 		bool IsOpen() const noexcept;
 		void SetOpen(bool open) noexcept;
 		void Toggle() noexcept;
-		void SetUiMouseStateProvider(ModEngineGetUiMouseStateFn provider) noexcept;
+		void SetMouseStateProvider(ModEngineGetUiMouseStateFn provider) noexcept;
 
 	private:
 		void BuildNavigation();
@@ -44,7 +44,6 @@ namespace cheat_mod {
 		bool InitializeGraphics(void* graphicsContext) noexcept;
 		void ShutdownGraphics() noexcept;
 		bool CreateRenderTarget() noexcept;
-		void ApplyEngineMouseState() noexcept;
 		static bool IsMouseMessage(std::uint32_t message) noexcept;
 
 		dl::imgui::UiContext context_;
@@ -54,7 +53,6 @@ namespace cheat_mod {
 		ID3D11DeviceContext* deviceContext_ = nullptr;
 		ID3D11RenderTargetView* renderTarget_ = nullptr;
 		HWND window_ = nullptr;
-		ModEngineGetUiMouseStateFn getUiMouseState_ = nullptr;
 		std::atomic_bool open_ = false;
 		std::atomic_bool engineMouse_ = false;
 		bool graphicsInitialized_ = false;

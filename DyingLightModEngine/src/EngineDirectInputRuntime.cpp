@@ -22,10 +22,13 @@ namespace {
 	using CreateDeviceFn = HRESULT(__stdcall*)(void*, const GUID&, void**, void*);
 	using GetDeviceStateFn = HRESULT(__stdcall*)(void*, DWORD, void*);
 	using GetDeviceDataFn = HRESULT(__stdcall*)(void*, DWORD, DIDEVICEOBJECTDATA*, DWORD*, DWORD);
+	using GetRawInputDataFn = UINT(WINAPI*)(HRAWINPUT, UINT, LPVOID, PUINT, UINT);
+	using GetRawInputBufferFn = UINT(WINAPI*)(PRAWINPUT, PUINT, UINT);
 
 	std::atomic_bool g_installed = false;
 	std::atomic_bool g_uiActive = false;
 	std::atomic_bool g_mouseCaptured = false;
+	std::atomic_bool g_rawInputHooked = false;
 	std::atomic<HWND> g_gameWindow = nullptr;
 	std::atomic<int32_t> g_clientWidth = 0;
 	std::atomic<int32_t> g_clientHeight = 0;
@@ -37,6 +40,8 @@ namespace {
 	GetDeviceStateFn g_originalGetDeviceState = nullptr;
 	GetDeviceDataFn g_originalGetDeviceData = nullptr;
 	CreateDeviceFn g_originalCreateDevice = nullptr;
+	GetRawInputDataFn g_originalGetRawInputData = nullptr;
+	GetRawInputBufferFn g_originalGetRawInputBuffer = nullptr;
 	std::array<void*, kMaxHookedTargets> g_hookedTargets{};
 	std::size_t g_hookedTargetCount = 0;
 
@@ -170,6 +175,29 @@ namespace {
 		}
 	}
 
+	void AccumulateRawInput(const RAWINPUT& raw) noexcept
+	{
+		if (raw.header.dwType == RIM_TYPEMOUSE) {
+			AccumulateRawMouseState(raw.data.mouse);
+		}
+	}
+
+	void AccumulateRawInputBuffer(const void* data, UINT size) noexcept
+	{
+		const auto* cursor = static_cast<const std::byte*>(data);
+		UINT remaining = size;
+		while (cursor != nullptr && remaining >= sizeof(RAWINPUTHEADER)) {
+			const auto* raw = reinterpret_cast<const RAWINPUT*>(cursor);
+			const UINT blockSize = raw->header.dwSize;
+			if (blockSize < sizeof(RAWINPUTHEADER) || blockSize > remaining) {
+				break;
+			}
+			AccumulateRawInput(*raw);
+			cursor += blockSize;
+			remaining -= blockSize;
+		}
+	}
+
 	bool HookTarget(void* target, void* detour, void** original) noexcept
 	{
 		if (target == nullptr || detour == nullptr || original == nullptr) {
@@ -244,6 +272,50 @@ namespace {
 		return result;
 	}
 
+	UINT WINAPI GetRawInputDataDetour(
+		HRAWINPUT input,
+		UINT command,
+		LPVOID data,
+		PUINT size,
+		UINT headerSize) noexcept
+	{
+		const UINT result = g_originalGetRawInputData != nullptr
+			? g_originalGetRawInputData(input, command, data, size, headerSize)
+			: static_cast<UINT>(-1);
+		if (result == static_cast<UINT>(-1) ||
+			!g_uiActive.load(std::memory_order_relaxed) ||
+			command != RID_INPUT ||
+			data == nullptr) {
+			return result;
+		}
+
+		AccumulateRawInputBuffer(data, result);
+		SecureZeroMemory(data, result);
+		return result;
+	}
+
+	UINT WINAPI GetRawInputBufferDetour(
+		PRAWINPUT data,
+		PUINT size,
+		UINT headerSize) noexcept
+	{
+		const UINT result = g_originalGetRawInputBuffer != nullptr
+			? g_originalGetRawInputBuffer(data, size, headerSize)
+			: static_cast<UINT>(-1);
+		if (result == static_cast<UINT>(-1) ||
+			!g_uiActive.load(std::memory_order_relaxed) ||
+			data == nullptr ||
+			size == nullptr) {
+			return result;
+		}
+
+		const UINT byteCount = *size;
+		AccumulateRawInputBuffer(data, byteCount);
+		*size = 0;
+		SecureZeroMemory(data, byteCount);
+		return 0;
+	}
+
 	void HookMouseDevice(void* device) noexcept
 	{
 		if (device == nullptr) {
@@ -289,6 +361,28 @@ namespace {
 		return result;
 	}
 
+	void HookRawInputFunctions() noexcept
+	{
+		const HMODULE user32 = GetModuleHandleW(L"user32.dll");
+		if (user32 == nullptr) {
+			return;
+		}
+
+		const auto getRawInputData = reinterpret_cast<void*>(
+			GetProcAddress(user32, "GetRawInputData"));
+		const auto getRawInputBuffer = reinterpret_cast<void*>(
+			GetProcAddress(user32, "GetRawInputBuffer"));
+		const bool dataHooked = HookTarget(
+			getRawInputData,
+			reinterpret_cast<void*>(&GetRawInputDataDetour),
+			reinterpret_cast<void**>(&g_originalGetRawInputData));
+		const bool bufferHooked = HookTarget(
+			getRawInputBuffer,
+			reinterpret_cast<void*>(&GetRawInputBufferDetour),
+			reinterpret_cast<void**>(&g_originalGetRawInputBuffer));
+		g_rawInputHooked.store(dataHooked || bufferHooked, std::memory_order_relaxed);
+	}
+
 	void HookDirectInputInterface(DirectInput8CreateFn create, const IID& interfaceId) noexcept
 	{
 		if (create == nullptr) {
@@ -322,37 +416,42 @@ namespace {
 bool EngineDirectInputRuntime::Install() noexcept
 {
 	if (g_installed.exchange(true)) {
-		return g_mouseCaptured.load(std::memory_order_relaxed);
+		return g_mouseCaptured.load(std::memory_order_relaxed) ||
+			g_rawInputHooked.load(std::memory_order_relaxed);
 	}
 	if (!EnsureHookRuntime()) {
 		g_installed.store(false, std::memory_order_relaxed);
 		return false;
 	}
+	HookRawInputFunctions();
 	HMODULE module = GetModuleHandleW(L"dinput8.dll");
 	if (module == nullptr) {
 		module = LoadLibraryW(L"dinput8.dll");
 	}
-	if (module == nullptr) {
-		g_installed.store(false, std::memory_order_relaxed);
-		return false;
+	if (module != nullptr) {
+		const auto create = reinterpret_cast<DirectInput8CreateFn>(
+			GetProcAddress(module, "DirectInput8Create"));
+		if (create != nullptr) {
+			HookDirectInputInterface(create, IID_IDirectInput8W);
+			HookDirectInputInterface(create, IID_IDirectInput8A);
+		}
 	}
-	const auto create = reinterpret_cast<DirectInput8CreateFn>(
-		GetProcAddress(module, "DirectInput8Create"));
-	if (create == nullptr) {
-		g_installed.store(false, std::memory_order_relaxed);
-		return false;
-	}
-	HookDirectInputInterface(create, IID_IDirectInput8W);
-	HookDirectInputInterface(create, IID_IDirectInput8A);
 	const bool captured = g_mouseCaptured.load(std::memory_order_relaxed);
-	if (captured) {
-		EngineLogger::Info("DirectInput mouse device hooked; mod UI receives the pointer while it is open.");
+	const bool rawInputHooked = g_rawInputHooked.load(std::memory_order_relaxed);
+	if (captured && rawInputHooked) {
+		EngineLogger::Info("DirectInput and Raw Input mouse bridges are active.");
+	}
+	else if (captured) {
+		EngineLogger::Info("DirectInput mouse bridge is active; Raw Input hook is unavailable.");
+	}
+	else if (rawInputHooked) {
+		EngineLogger::Info("Raw Input mouse bridge is active; DirectInput hook is unavailable.");
 	}
 	else {
-		EngineLogger::Warning("No DirectInput mouse device vtable could be hooked; game mouse input may not be blocked.");
+		EngineLogger::Warning("No mouse input bridge could be hooked; game mouse input may not be blocked.");
 		g_installed.store(false, std::memory_order_relaxed);
 	}
-	return captured;
+	return captured || rawInputHooked;
 }
 
 void EngineDirectInputRuntime::Uninstall() noexcept
@@ -365,7 +464,10 @@ void EngineDirectInputRuntime::Uninstall() noexcept
 	g_originalGetDeviceState = nullptr;
 	g_originalGetDeviceData = nullptr;
 	g_originalCreateDevice = nullptr;
+	g_originalGetRawInputData = nullptr;
+	g_originalGetRawInputBuffer = nullptr;
 	g_mouseCaptured.store(false, std::memory_order_relaxed);
+	g_rawInputHooked.store(false, std::memory_order_relaxed);
 	g_uiActive.store(false, std::memory_order_relaxed);
 	g_installed.store(false, std::memory_order_relaxed);
 }
@@ -407,7 +509,9 @@ bool EngineDirectInputRuntime::IsMouseCaptured() noexcept
 
 void EngineDirectInputRuntime::HandleRawInput(HRAWINPUT input) noexcept
 {
-	if (input == nullptr || !g_uiActive.load(std::memory_order_relaxed)) {
+	if (input == nullptr ||
+		!g_uiActive.load(std::memory_order_relaxed) ||
+		g_rawInputHooked.load(std::memory_order_relaxed)) {
 		return;
 	}
 

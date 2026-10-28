@@ -53,13 +53,8 @@ namespace cheat_mod {
 		ImGui::GetIO().MouseDrawCursor = open;
 		ImGui_ImplDX11_NewFrame();
 		ImGui_ImplWin32_NewFrame();
-		if (open) {
-			ApplyEngineMouseState();
-		}
-		else {
-			engineMouse_.store(false);
-		}
 		context_.BeginFrame();
+		engineMouse_.store(open && context_.IsMouseProviderActive());
 		if (open) {
 			ImGui::SetNextWindowSize(ImVec2(760.0F, 520.0F), ImGuiCond_FirstUseEver);
 			if (ImGui::Begin("Cheat Mod", &open, ImGuiWindowFlags_NoCollapse)) {
@@ -88,6 +83,11 @@ namespace cheat_mod {
 		open_.exchange(!open_.load());
 	}
 
+	void CheatModUi::SetMouseStateProvider(ModEngineGetUiMouseStateFn provider) noexcept
+	{
+		context_.SetMouseStateProvider(provider);
+	}
+
 	void CheatModUi::HandleWindowMessage(
 		std::uintptr_t window,
 		std::uint32_t message,
@@ -107,39 +107,6 @@ namespace cheat_mod {
 			static_cast<UINT>(message),
 			static_cast<WPARAM>(wParam),
 			static_cast<LPARAM>(lParam));
-	}
-
-	void CheatModUi::SetUiMouseStateProvider(ModEngineGetUiMouseStateFn provider) noexcept
-	{
-		getUiMouseState_ = provider;
-	}
-
-	void CheatModUi::ApplyEngineMouseState() noexcept
-	{
-		if (getUiMouseState_ == nullptr) {
-			engineMouse_.store(false);
-			return;
-		}
-		DlModUiMouseStateV1 state{};
-		state.structSize = sizeof(state);
-		state.abiVersion = MODSDK_ABI_VERSION;
-		if (getUiMouseState_(&state) == 0U) {
-			engineMouse_.store(false);
-			return;
-		}
-		ImGuiIO& io = ImGui::GetIO();
-		if ((state.flags & DLMOD_UI_MOUSE_POSITION_VALID) != 0U) {
-			io.AddMousePosEvent(
-				static_cast<float>(state.positionX),
-				static_cast<float>(state.positionY));
-		}
-		for (int button = 0; button < 5; ++button) {
-			io.AddMouseButtonEvent(button, (state.buttons & (1U << button)) != 0U);
-		}
-		if (state.wheelDelta != 0.0F) {
-			io.AddMouseWheelEvent(0.0F, state.wheelDelta);
-		}
-		engineMouse_.store(true);
 	}
 
 	bool CheatModUi::IsMouseMessage(std::uint32_t message) noexcept

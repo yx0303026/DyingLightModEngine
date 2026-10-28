@@ -1,5 +1,7 @@
 #pragma once
 
+#include "EngineAbi.h"
+
 #include <imgui.h>
 
 #include <functional>
@@ -122,12 +124,18 @@ namespace dl::imgui {
 		void Destroy() noexcept;
 		bool IsCreated() const noexcept;
 		ImGuiContext* GetNativeContext() const noexcept;
+		void SetMouseStateProvider(ModEngineGetUiMouseStateFn provider) noexcept;
+		bool IsMouseProviderActive() const noexcept;
 		void BeginFrame();
 		void Render(UIElement& root);
 		void EndFrame();
 
 	private:
+		void ApplyMouseState() noexcept;
+
 		ImGuiContext* context_ = nullptr;
+		ModEngineGetUiMouseStateFn mouseStateProvider_ = nullptr;
+		bool mouseProviderActive_ = false;
 	};
 
 } // namespace dl::imgui
