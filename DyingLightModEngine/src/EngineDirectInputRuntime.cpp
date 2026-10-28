@@ -10,6 +10,7 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
+#include <vector>
 
 namespace {
 
@@ -108,6 +109,64 @@ namespace {
 		}
 		if (state->lX != 0 || state->lY != 0) {
 			MoveCursor(state->lX, state->lY);
+		}
+	}
+
+	void AccumulateRawMouseState(const RAWMOUSE& mouse) noexcept
+	{
+		if ((mouse.usFlags & MOUSE_MOVE_ABSOLUTE) != 0U) {
+			const int32_t width = g_clientWidth.load(std::memory_order_relaxed);
+			const int32_t height = g_clientHeight.load(std::memory_order_relaxed);
+			if (width > 0 && height > 0) {
+				g_cursorX.store(
+					static_cast<int32_t>((static_cast<uint64_t>(mouse.lLastX) *
+						static_cast<uint64_t>(width - 1)) / 65535ULL),
+					std::memory_order_relaxed);
+				g_cursorY.store(
+					static_cast<int32_t>((static_cast<uint64_t>(mouse.lLastY) *
+						static_cast<uint64_t>(height - 1)) / 65535ULL),
+					std::memory_order_relaxed);
+			}
+		}
+		else if (mouse.lLastX != 0 || mouse.lLastY != 0) {
+			MoveCursor(mouse.lLastX, mouse.lLastY);
+		}
+
+		const USHORT buttonFlags = static_cast<USHORT>(mouse.ulButtons);
+		if ((buttonFlags & RI_MOUSE_BUTTON_1_DOWN) != 0U) {
+			SetButtonState(0U, true);
+		}
+		if ((buttonFlags & RI_MOUSE_BUTTON_1_UP) != 0U) {
+			SetButtonState(0U, false);
+		}
+		if ((buttonFlags & RI_MOUSE_BUTTON_2_DOWN) != 0U) {
+			SetButtonState(1U, true);
+		}
+		if ((buttonFlags & RI_MOUSE_BUTTON_2_UP) != 0U) {
+			SetButtonState(1U, false);
+		}
+		if ((buttonFlags & RI_MOUSE_BUTTON_3_DOWN) != 0U) {
+			SetButtonState(2U, true);
+		}
+		if ((buttonFlags & RI_MOUSE_BUTTON_3_UP) != 0U) {
+			SetButtonState(2U, false);
+		}
+		if ((buttonFlags & RI_MOUSE_BUTTON_4_DOWN) != 0U) {
+			SetButtonState(3U, true);
+		}
+		if ((buttonFlags & RI_MOUSE_BUTTON_4_UP) != 0U) {
+			SetButtonState(3U, false);
+		}
+		if ((buttonFlags & RI_MOUSE_BUTTON_5_DOWN) != 0U) {
+			SetButtonState(4U, true);
+		}
+		if ((buttonFlags & RI_MOUSE_BUTTON_5_UP) != 0U) {
+			SetButtonState(4U, false);
+		}
+		if ((buttonFlags & RI_MOUSE_WHEEL) != 0U) {
+			g_wheelTicks.fetch_add(
+				static_cast<SHORT>(mouse.usButtonData),
+				std::memory_order_relaxed);
 		}
 	}
 
@@ -266,6 +325,7 @@ bool EngineDirectInputRuntime::Install() noexcept
 		return g_mouseCaptured.load(std::memory_order_relaxed);
 	}
 	if (!EnsureHookRuntime()) {
+		g_installed.store(false, std::memory_order_relaxed);
 		return false;
 	}
 	HMODULE module = GetModuleHandleW(L"dinput8.dll");
@@ -273,11 +333,13 @@ bool EngineDirectInputRuntime::Install() noexcept
 		module = LoadLibraryW(L"dinput8.dll");
 	}
 	if (module == nullptr) {
+		g_installed.store(false, std::memory_order_relaxed);
 		return false;
 	}
 	const auto create = reinterpret_cast<DirectInput8CreateFn>(
 		GetProcAddress(module, "DirectInput8Create"));
 	if (create == nullptr) {
+		g_installed.store(false, std::memory_order_relaxed);
 		return false;
 	}
 	HookDirectInputInterface(create, IID_IDirectInput8W);
@@ -287,7 +349,8 @@ bool EngineDirectInputRuntime::Install() noexcept
 		EngineLogger::Info("DirectInput mouse device hooked; mod UI receives the pointer while it is open.");
 	}
 	else {
-		EngineLogger::Warning("No DirectInput mouse device vtable could be hooked.");
+		EngineLogger::Warning("No DirectInput mouse device vtable could be hooked; game mouse input may not be blocked.");
+		g_installed.store(false, std::memory_order_relaxed);
 	}
 	return captured;
 }
@@ -342,6 +405,42 @@ bool EngineDirectInputRuntime::IsMouseCaptured() noexcept
 	return g_mouseCaptured.load(std::memory_order_relaxed);
 }
 
+void EngineDirectInputRuntime::HandleRawInput(HRAWINPUT input) noexcept
+{
+	if (input == nullptr || !g_uiActive.load(std::memory_order_relaxed)) {
+		return;
+	}
+
+	UINT size = 0;
+	if (GetRawInputData(input, RID_INPUT, nullptr, &size, sizeof(RAWINPUTHEADER)) ==
+		static_cast<UINT>(-1) || size < sizeof(RAWINPUTHEADER)) {
+		return;
+	}
+
+	std::vector<std::byte> buffer;
+	try {
+		buffer.resize(size);
+	}
+	catch (...) {
+		return;
+	}
+
+	if (GetRawInputData(
+		input,
+		RID_INPUT,
+		buffer.data(),
+		&size,
+		sizeof(RAWINPUTHEADER)) == static_cast<UINT>(-1) ||
+		size < sizeof(RAWINPUT)) {
+		return;
+	}
+
+	const auto* raw = reinterpret_cast<const RAWINPUT*>(buffer.data());
+	if (raw->header.dwType == RIM_TYPEMOUSE) {
+		AccumulateRawMouseState(raw->data.mouse);
+	}
+}
+
 uint8_t MODSDK_CALL EngineDirectInputRuntime::GetUiMouseState(DlModUiMouseStateV1* state) noexcept
 {
 	if (state == nullptr || state->structSize < sizeof(DlModUiMouseStateV1)) {
@@ -353,11 +452,14 @@ uint8_t MODSDK_CALL EngineDirectInputRuntime::GetUiMouseState(DlModUiMouseStateV
 	state->positionY = 0;
 	state->wheelDelta = 0.0F;
 	state->buttons = 0U;
-	if (!g_mouseCaptured.load(std::memory_order_relaxed)) {
+	if (!g_uiActive.load(std::memory_order_relaxed)) {
 		return 0U;
 	}
 	UpdateClientSize();
-	state->flags = DLMOD_UI_MOUSE_POSITION_VALID | DLMOD_UI_MOUSE_DEVICE_CAPTURED;
+	state->flags = DLMOD_UI_MOUSE_POSITION_VALID;
+	if (g_mouseCaptured.load(std::memory_order_relaxed)) {
+		state->flags |= DLMOD_UI_MOUSE_DEVICE_CAPTURED;
+	}
 	state->positionX = g_cursorX.load(std::memory_order_relaxed);
 	state->positionY = g_cursorY.load(std::memory_order_relaxed);
 	state->buttons = g_buttons.load(std::memory_order_relaxed);

@@ -123,8 +123,7 @@ namespace cheat_mod {
 		DlModUiMouseStateV1 state{};
 		state.structSize = sizeof(state);
 		state.abiVersion = MODSDK_ABI_VERSION;
-		if (getUiMouseState_(&state) == 0U ||
-			(state.flags & DLMOD_UI_MOUSE_DEVICE_CAPTURED) == 0U) {
+		if (getUiMouseState_(&state) == 0U) {
 			engineMouse_.store(false);
 			return;
 		}
@@ -161,6 +160,7 @@ namespace cheat_mod {
 		case WM_XBUTTONDBLCLK:
 		case WM_MOUSEWHEEL:
 		case WM_MOUSEHWHEEL:
+		case WM_INPUT:
 			return true;
 		default:
 			return false;

@@ -8,11 +8,11 @@
 
 /*
  * Games built on DirectInput (Dying Light reads the mouse through
- * IDirectInputDevice8::GetDeviceState) never consult window messages or the system
- * cursor, so filtering WM_INPUT/WM_MOUSEMOVE cannot stop them from steering the
- * camera. This runtime hooks the DirectInput mouse device, suppresses its state
- * while a mod UI is open, and republishes the relative motion as a virtual cursor
- * that mods feed into their ImGui backend.
+ * IDirectInputDevice8::GetDeviceState) normally never consult window messages or
+ * the system cursor. This runtime hooks the DirectInput mouse device when
+ * possible, and also accepts WM_INPUT samples as a fallback, suppressing the
+ * native state while a mod UI is open and republishing relative motion as a
+ * virtual cursor that mods feed into their ImGui backend.
  */
 class EngineDirectInputRuntime final {
 public:
@@ -24,6 +24,7 @@ public:
 	static void SetGameWindow(HWND window) noexcept;
 	static void SetUiActive(bool active) noexcept;
 	static bool IsMouseCaptured() noexcept;
+	static void HandleRawInput(HRAWINPUT input) noexcept;
 
 	/* Host API entry point used by mods through DlModHostApiV1::getUiMouseState. */
 	static uint8_t MODSDK_CALL GetUiMouseState(DlModUiMouseStateV1* state) noexcept;

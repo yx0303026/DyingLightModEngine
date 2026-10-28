@@ -36,6 +36,10 @@ void EngineInputRuntime::RefreshUiState() noexcept
 	RefreshWindowHook();
 	const bool uiOpen = EngineModManager::IsUiOpen();
 	const bool previousState = uiOpen_.exchange(uiOpen);
+	if (uiOpen && !previousState && !EngineDirectInputRuntime::IsMouseCaptured()) {
+		/* The game may create its DirectInput device after engine startup. */
+		EngineDirectInputRuntime::Install();
+	}
 	EngineDirectInputRuntime::SetUiActive(uiOpen);
 	if (previousState != uiOpen && gameWindow_ != nullptr) {
 		PostMessageW(gameWindow_, kApplyUiInputStateMessage, 0, 0);
@@ -153,6 +157,10 @@ LRESULT EngineInputRuntime::HandleWindowMessage(
 
 	const bool uiOpen = uiOpen_.load(std::memory_order_relaxed);
 	ApplyUiInputState(uiOpen);
+	if (uiOpen && message == WM_INPUT) {
+		EngineDirectInputRuntime::HandleRawInput(
+			reinterpret_cast<HRAWINPUT>(lParam));
+	}
 	EngineModManager::OnWindowMessage(
 		reinterpret_cast<uintptr_t>(window),
 		static_cast<uint32_t>(message),

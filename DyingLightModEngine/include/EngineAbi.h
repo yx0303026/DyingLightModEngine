@@ -57,7 +57,11 @@ extern "C" {
 		uint32_t buttons;
 	} DlModUiMouseStateV1;
 
-	/* Returns 1 when the state was filled, 0 when no DirectInput mouse is captured. */
+	/*
+	 * Returns 1 while the UI owns the virtual pointer. The device-captured flag
+	 * is set when the DirectInput bridge is active; position data can also come
+	 * from the window's raw-input fallback.
+	 */
 	typedef uint8_t(MODSDK_CALL* ModEngineGetUiMouseStateFn)(
 		DlModUiMouseStateV1* state);
 
