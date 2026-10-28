@@ -32,7 +32,7 @@ target_include_directories(ExampleMod PRIVATE
 target_compile_options(ExampleMod PRIVATE /W4 /permissive- /EHsc)
 set_target_properties(ExampleMod PROPERTIES OUTPUT_NAME "example_mod")
 
-dlmod_set_output_directories(ExampleMod)
+dlmod_set_output_directories(ExampleMod ExampleMod)
 
 install(TARGETS ExampleMod
     RUNTIME DESTINATION "Mods/ExampleMod"

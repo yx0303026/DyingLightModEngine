@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stddef.h>
 
 #if defined(_WIN32)
 #define MODSDK_CALL __cdecl
@@ -45,6 +46,9 @@ extern "C" {
 		void* modContext,
 		const DlModHostApiV1* hostApi);
 	typedef void(MODSDK_CALL* DlModOnUnloadFn)(void* modContext);
+	typedef void(MODSDK_CALL* DlModOnRenderFrameFn)(
+		void* modContext,
+		void* graphicsContext);
 
 	/* String fields are copied during registration; context remains owned by the mod until unload. */
 	typedef struct DlModDescriptorV1 {
@@ -56,7 +60,13 @@ extern "C" {
 		void* context;
 		DlModOnLoadFn onLoad;
 		DlModOnUnloadFn onUnload;
+		/* Optional directory name under <game root>/Logs. */
+		const char* logName;
+		/* Optional callback invoked from the host graphics presentation thread. */
+		DlModOnRenderFrameFn onRenderFrame;
 	} DlModDescriptorV1;
+
+#define DLMOD_DESCRIPTOR_V1_MIN_SIZE ((uint32_t)offsetof(DlModDescriptorV1, logName))
 
 	/*
 	 * Every loadable mod DLL must export a function named ModSDK_QueryMod.
@@ -73,6 +83,8 @@ extern "C" {
 	typedef DlModResult(MODSDK_CALL* ModEngineUnregisterModFn)(
 		const char* modId);
 	typedef DlModResult(MODSDK_CALL* ModEngineShutdownFn)(void);
+	typedef void(MODSDK_CALL* ModEngineRenderFrameFn)(
+		void* graphicsContext);
 
 	typedef struct ModEngineApiV1 {
 		uint32_t structSize;
@@ -81,6 +93,7 @@ extern "C" {
 		ModEngineRegisterModFn registerMod;
 		ModEngineUnregisterModFn unregisterMod;
 		ModEngineShutdownFn shutdown;
+		ModEngineRenderFrameFn renderFrame;
 	} ModEngineApiV1;
 
 	typedef DlModResult(MODSDK_CALL* ModSDKQueryApiFn)(

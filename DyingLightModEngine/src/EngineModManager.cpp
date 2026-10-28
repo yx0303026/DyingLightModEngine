@@ -165,23 +165,46 @@ namespace {
 		return std::filesystem::is_regular_file(path, error) && !error;
 	}
 
+	bool HasDllExtension(const ModPath& path) noexcept
+	{
+		const std::wstring extension = path.extension().wstring();
+		return extension.size() == 4 &&
+			(extension[1] == L'd' || extension[1] == L'D') &&
+			(extension[2] == L'l' || extension[2] == L'L') &&
+			(extension[3] == L'l' || extension[3] == L'L');
+	}
+
+	bool IsDynamicLibrary(const ModPath& path) noexcept
+	{
+		return HasDllExtension(path) && IsRegularFile(path);
+	}
+
 	ModPath FindModLibrary(const ModPath& modsDirectory, const std::wstring& modName)
 	{
 		const ModPath modDirectory = modsDirectory / modName;
-		if (!std::filesystem::is_directory(modDirectory)) {
-			return {};
-		}
+		std::error_code error;
+		if (std::filesystem::is_directory(modDirectory, error) && !error) {
+			const std::wstring snakeCaseName = ToSnakeCase(modName);
+			if (!snakeCaseName.empty()) {
+				const ModPath snakeCaseLibrary = modDirectory / (snakeCaseName + L".dll");
+				if (IsRegularFile(snakeCaseLibrary)) {
+					return snakeCaseLibrary;
+				}
+			}
 
-		const std::wstring snakeCaseName = ToSnakeCase(modName);
-		if (!snakeCaseName.empty()) {
-			const ModPath snakeCaseLibrary = modDirectory / (snakeCaseName + L".dll");
-			if (IsRegularFile(snakeCaseLibrary)) {
-				return snakeCaseLibrary;
+			const ModPath nameLibrary = modDirectory / (modName + L".dll");
+			if (IsRegularFile(nameLibrary)) {
+				return nameLibrary;
 			}
 		}
 
-		const ModPath nameLibrary = modDirectory / (modName + L".dll");
-		return IsRegularFile(nameLibrary) ? nameLibrary : ModPath{};
+		if (HasDllExtension(modName)) {
+			const ModPath explicitLibrary = modsDirectory / modName;
+			return IsRegularFile(explicitLibrary) ? explicitLibrary : ModPath{};
+		}
+
+		const ModPath flatLibrary = modsDirectory / (modName + L".dll");
+		return IsRegularFile(flatLibrary) ? flatLibrary : ModPath{};
 	}
 
 	std::vector<ModPath> FindModDirectories(const ModPath& modsDirectory)
@@ -202,6 +225,26 @@ namespace {
 
 		std::sort(directories.begin(), directories.end(), &ComparePaths);
 		return directories;
+	}
+
+	std::vector<ModPath> FindModLibraries(const ModPath& modsDirectory)
+	{
+		std::vector<ModPath> libraries;
+		std::error_code error;
+		std::filesystem::directory_iterator iterator(modsDirectory, error);
+		if (error) {
+			return libraries;
+		}
+
+		for (const std::filesystem::directory_entry& entry : iterator) {
+			std::error_code entryError;
+			if (entry.is_regular_file(entryError) && !entryError && IsDynamicLibrary(entry.path())) {
+				libraries.push_back(entry.path());
+			}
+		}
+
+		std::sort(libraries.begin(), libraries.end(), &ComparePaths);
+		return libraries;
 	}
 
 	std::vector<LoadedMod>::iterator FindLoadedMod(
@@ -226,7 +269,8 @@ namespace {
 		return api.structSize >= sizeof(ModEngineApiV1) &&
 			api.abiVersion == MODSDK_ABI_VERSION &&
 			api.registerMod != nullptr &&
-			api.unregisterMod != nullptr;
+			api.unregisterMod != nullptr &&
+			api.renderFrame != nullptr;
 	}
 
 	DlModResult LoadModLibrary(
@@ -256,7 +300,7 @@ namespace {
 		}
 
 		if (queryResult != DLMOD_RESULT_SUCCESS ||
-			descriptor.structSize < sizeof(DlModDescriptorV1) ||
+			descriptor.structSize < DLMOD_DESCRIPTOR_V1_MIN_SIZE ||
 			descriptor.abiVersion != MODSDK_ABI_VERSION ||
 			descriptor.id == nullptr ||
 			descriptor.id[0] == '\0' ||
@@ -354,6 +398,7 @@ DlModResult EngineModManager::LoadAll(const char* modsDirectory) noexcept
 
 		const std::lock_guard<std::recursive_mutex> lock(GetState().mutex);
 		const std::vector<ModPath> directories = FindModDirectories(root);
+		const std::vector<ModPath> libraries = FindModLibraries(root);
 		bool loadedAny = false;
 		bool failedAny = false;
 		for (const ModPath& directory : directories) {
@@ -362,6 +407,15 @@ DlModResult EngineModManager::LoadAll(const char* modsDirectory) noexcept
 				loadedAny = true;
 			}
 			else if (result != DLMOD_RESULT_NOT_FOUND) {
+				failedAny = true;
+			}
+		}
+		for (const ModPath& library : libraries) {
+			const DlModResult result = LoadModLibrary(library, GetState().loadedMods);
+			if (result == DLMOD_RESULT_SUCCESS) {
+				loadedAny = true;
+			}
+			else {
 				failedAny = true;
 			}
 		}
@@ -443,5 +497,18 @@ uint32_t EngineModManager::GetLoadedCount() noexcept
 	}
 	catch (...) {
 		return 0;
+	}
+}
+
+void EngineModManager::RenderFrame(void* graphicsContext) noexcept
+{
+	try {
+		ModEngineApiV1 engineApi{};
+		if (!QueryEngineApi(engineApi)) {
+			return;
+		}
+		engineApi.renderFrame(graphicsContext);
+	}
+	catch (...) {
 	}
 }

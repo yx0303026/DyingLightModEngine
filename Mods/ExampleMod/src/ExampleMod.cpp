@@ -65,7 +65,8 @@ extern "C" DlModResult MODSDK_CALL ModSDK_QueryMod(
 		"1.0.0",
 		&g_exampleModState,
 		&OnLoad,
-		&OnUnload
+		&OnUnload,
+		"ExampleMod"
 	};
 	return DLMOD_RESULT_SUCCESS;
 }

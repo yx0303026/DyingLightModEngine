@@ -76,12 +76,7 @@ namespace dl::imgui {
 
 	void NavigationBar::OnRender()
 	{
-		bool first = true;
 		for (const Item& item : items_) {
-			if (!first) {
-				ImGui::SameLine();
-			}
-			first = false;
 			if (ImGui::Selectable(item.label.c_str(), selectedId_ == item.id)) {
 				SetSelectedId(item.id);
 			}

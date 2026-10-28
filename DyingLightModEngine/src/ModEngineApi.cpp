@@ -1,4 +1,5 @@
 #include "EngineAbi.h"
+#include "EngineLogger.h"
 
 #include <Windows.h>
 #include <mutex>
@@ -18,6 +19,8 @@ namespace {
 		std::string version;
 		void* context = nullptr;
 		DlModOnUnloadFn onUnload = nullptr;
+		DlModOnRenderFrameFn onRenderFrame = nullptr;
+		void* logContext = nullptr;
 		ModState state = ModState::Loading;
 	};
 
@@ -98,27 +101,53 @@ namespace {
 
 	DlModResult MODSDK_CALL RegisterMod(const DlModDescriptorV1* mod)
 	{
-		if (mod == nullptr || mod->structSize < sizeof(DlModDescriptorV1) || mod->abiVersion != MODSDK_ABI_VERSION ||
+		if (mod == nullptr || mod->structSize < DLMOD_DESCRIPTOR_V1_MIN_SIZE || mod->abiVersion != MODSDK_ABI_VERSION ||
 			mod->id == nullptr || mod->id[0] == '\0' || mod->name == nullptr || mod->version == nullptr || mod->onLoad == nullptr) {
 			return DLMOD_RESULT_INVALID_ARGUMENT;
 		}
 
+		void* logContext = nullptr;
 		try {
 			EngineRuntime& runtime = GetRuntime();
 			const std::lock_guard<std::recursive_mutex> lifecycleGuard(runtime.lifecycleLock);
 			DlModHostApiV1 hostApi{};
 			const std::string id(mod->id);
+			const char* logName = mod->name;
+			if (mod->structSize >= sizeof(DlModDescriptorV1) && mod->logName != nullptr && mod->logName[0] != '\0') {
+				logName = mod->logName;
+			}
+			logContext = EngineLogger::CreateModContext(logName);
+			if (logContext == nullptr) {
+				return DLMOD_RESULT_INVALID_ARGUMENT;
+			}
 			{
 				const ExclusiveLockGuard stateGuard(runtime.lock);
 				if (!runtime.initialized) {
+					EngineLogger::DestroyModContext(logContext);
+					logContext = nullptr;
 					return DLMOD_RESULT_INVALID_STATE;
 				}
 				const auto existing = FindModRecord(runtime, id);
 				if (existing != runtime.mods.end()) {
+					EngineLogger::DestroyModContext(logContext);
+					logContext = nullptr;
 					return DLMOD_RESULT_INVALID_STATE;
 				}
-				runtime.mods.push_back({ id, mod->name, mod->version, mod->context, mod->onUnload, ModState::Loading });
+				const DlModOnRenderFrameFn onRenderFrame =
+					mod->structSize >= sizeof(DlModDescriptorV1) ? mod->onRenderFrame : nullptr;
+				runtime.mods.push_back({
+					id,
+					mod->name,
+					mod->version,
+					mod->context,
+					mod->onUnload,
+					onRenderFrame,
+					logContext,
+					ModState::Loading
+				});
 				hostApi = runtime.hostApi;
+				hostApi.context = logContext;
+				logContext = nullptr;
 			}
 
 			DlModResult loadResult = DLMOD_RESULT_INVALID_STATE;
@@ -138,12 +167,15 @@ namespace {
 					failed->state = ModState::Loaded;
 				}
 				else {
+					EngineLogger::DestroyModContext(failed->logContext);
+					logContext = nullptr;
 					runtime.mods.erase(failed);
 				}
 			}
 			return loadResult;
 		}
 		catch (...) {
+			EngineLogger::DestroyModContext(logContext);
 			return DLMOD_RESULT_INVALID_STATE;
 		}
 	}
@@ -181,6 +213,7 @@ namespace {
 				catch (...) {
 				}
 			}
+			EngineLogger::DestroyModContext(removed.logContext);
 			return DLMOD_RESULT_SUCCESS;
 		}
 		catch (...) {
@@ -212,11 +245,37 @@ namespace {
 					catch (...) {
 					}
 				}
+				EngineLogger::DestroyModContext(mod->logContext);
 			}
 			return DLMOD_RESULT_SUCCESS;
 		}
 		catch (...) {
 			return DLMOD_RESULT_INVALID_STATE;
+		}
+	}
+
+	void MODSDK_CALL RenderFrame(void* graphicsContext)
+	{
+		EngineRuntime& runtime = GetRuntime();
+		const std::lock_guard<std::recursive_mutex> lifecycleGuard(runtime.lifecycleLock);
+		std::vector<ModRecord> mods;
+		{
+			const ExclusiveLockGuard stateGuard(runtime.lock);
+			if (!runtime.initialized) {
+				return;
+			}
+			mods = runtime.mods;
+		}
+
+		for (const ModRecord& mod : mods) {
+			if (mod.state != ModState::Loaded || mod.onRenderFrame == nullptr) {
+				continue;
+			}
+			try {
+				mod.onRenderFrame(mod.context, graphicsContext);
+			}
+			catch (...) {
+			}
 		}
 	}
 
@@ -226,7 +285,8 @@ namespace {
 		&Initialize,
 		&RegisterMod,
 		&UnregisterMod,
-		&Shutdown
+		&Shutdown,
+		&RenderFrame
 	};
 
 }

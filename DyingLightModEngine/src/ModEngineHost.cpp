@@ -1,12 +1,22 @@
 #include "EngineHost.h"
 
 #include "EngineAbi.h"
+#include "EngineGraphicsRuntime.h"
 #include "EngineLogger.h"
 #include "EngineModManager.h"
 
+namespace {
+
+EngineGraphicsRuntime g_graphicsRuntime;
+
+}
+
 bool InitializeModEngine(HMODULE engineModule) noexcept
 {
-	EngineLogger::Initialize(engineModule);
+	if (!EngineLogger::Initialize(engineModule)) {
+		OutputDebugStringA("[DyingLightModEngine] Logger initialization failed\n");
+		return false;
+	}
 
 	ModEngineApiV1 engineApi{};
 	engineApi.structSize = sizeof(engineApi);
@@ -14,7 +24,8 @@ bool InitializeModEngine(HMODULE engineModule) noexcept
 		engineApi.structSize < sizeof(ModEngineApiV1) ||
 		engineApi.abiVersion != MODSDK_ABI_VERSION ||
 		engineApi.initialize == nullptr || engineApi.registerMod == nullptr ||
-		engineApi.unregisterMod == nullptr || engineApi.shutdown == nullptr) {
+		engineApi.unregisterMod == nullptr || engineApi.shutdown == nullptr ||
+		engineApi.renderFrame == nullptr) {
 		OutputDebugStringA("[DyingLightModEngine] Engine ABI negotiation failed\n");
 		return false;
 	}
@@ -39,6 +50,9 @@ bool InitializeModEngine(HMODULE engineModule) noexcept
 		engineApi.shutdown();
 		return false;
 	}
+	if (!g_graphicsRuntime.Initialize()) {
+		EngineLogger::Warning("DX11 graphics hook initialization failed; ImGui modules will remain unavailable.");
+	}
 	return true;
 }
 
@@ -53,6 +67,7 @@ bool ShutdownModEngine() noexcept
 		return false;
 	}
 
+	g_graphicsRuntime.Shutdown();
 	const DlModResult unloadResult = EngineModManager::UnloadAll();
 	if (unloadResult != DLMOD_RESULT_SUCCESS) {
 		EngineLogger::Error("Could not unload all mods; engine shutdown was cancelled.");

@@ -19,6 +19,8 @@ enum class EngineLogLevel : uint32_t {
 class EngineLogger final {
 public:
 	static MODSDK_API bool Initialize(HMODULE engineModule) noexcept;
+	static MODSDK_API void* CreateModContext(const char* modName) noexcept;
+	static MODSDK_API void DestroyModContext(void* context) noexcept;
 	static MODSDK_API void MODSDK_CALL HostCallback(void* context, uint32_t level, const char* message) noexcept;
 
 	static MODSDK_API void Log(EngineLogLevel level, const char* message) noexcept;

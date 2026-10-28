@@ -9,7 +9,11 @@ function(dlmod_set_output_directories target)
         message(FATAL_ERROR "Only x86 and x64 Windows targets are supported")
     endif()
 
-    set(_output_root "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../build/${_architecture}")
+    if(ARGC GREATER 1)
+        set(_output_root "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../build/Mods/${ARGV1}/${_architecture}")
+    else()
+        set(_output_root "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../build/${_architecture}")
+    endif()
     get_filename_component(_output_root "${_output_root}" ABSOLUTE)
 
     set_target_properties(${target} PROPERTIES

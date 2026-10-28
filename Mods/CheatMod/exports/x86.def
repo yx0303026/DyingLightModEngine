@@ -1,0 +1,3 @@
+LIBRARY cheat_mod
+EXPORTS
+    ModSDK_QueryMod
