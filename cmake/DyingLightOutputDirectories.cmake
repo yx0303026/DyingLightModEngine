@@ -26,3 +26,24 @@ function(dlmod_set_output_directories target)
         )
     endforeach()
 endfunction()
+
+function(dlmod_set_sdk_output_directories target)
+    set(_sdk_root "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../SDK")
+    get_filename_component(_sdk_root "${_sdk_root}" ABSOLUTE)
+
+    file(MAKE_DIRECTORY "${_sdk_root}/bin" "${_sdk_root}/lib" "${_sdk_root}/include")
+
+    set_target_properties(${target} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${_sdk_root}/bin"
+        LIBRARY_OUTPUT_DIRECTORY "${_sdk_root}/bin"
+        ARCHIVE_OUTPUT_DIRECTORY "${_sdk_root}/lib"
+    )
+
+    foreach(_configuration DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+        set_target_properties(${target} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY_${_configuration} "${_sdk_root}/bin"
+            LIBRARY_OUTPUT_DIRECTORY_${_configuration} "${_sdk_root}/bin"
+            ARCHIVE_OUTPUT_DIRECTORY_${_configuration} "${_sdk_root}/lib"
+        )
+    endforeach()
+endfunction()

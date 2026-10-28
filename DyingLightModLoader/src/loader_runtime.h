@@ -6,7 +6,6 @@
 
 struct LoaderRuntime {
     HMODULE moduleHandle = nullptr;
-    HMODULE modEngine = nullptr;
     DlModEngineApiV1 engineApi{};
 };
 

@@ -1,4 +1,4 @@
-#include "dl_mod_engine_api.h"
+#include "ModSDK.h"
 
 #include <Windows.h>
 #include <mutex>
@@ -76,12 +76,12 @@ bool HasLoadingMods(const EngineRuntime& runtime)
     return false;
 }
 
-DlModResult DLMOD_CALL Initialize(const DlModHostApiV1* hostApi)
+DlModResult MODSDK_CALL Initialize(const DlModHostApiV1* hostApi)
 {
     if (hostApi == nullptr || hostApi->structSize < sizeof(DlModHostApiV1)) {
         return DLMOD_RESULT_INVALID_ARGUMENT;
     }
-    if (hostApi->abiVersion != DLMOD_ENGINE_ABI_VERSION) {
+    if (hostApi->abiVersion != MODSDK_ABI_VERSION) {
         return DLMOD_RESULT_UNSUPPORTED_ABI;
     }
 
@@ -96,9 +96,9 @@ DlModResult DLMOD_CALL Initialize(const DlModHostApiV1* hostApi)
     return DLMOD_RESULT_SUCCESS;
 }
 
-DlModResult DLMOD_CALL RegisterMod(const DlModDescriptorV1* mod)
+DlModResult MODSDK_CALL RegisterMod(const DlModDescriptorV1* mod)
 {
-    if (mod == nullptr || mod->structSize < sizeof(DlModDescriptorV1) || mod->abiVersion != DLMOD_ENGINE_ABI_VERSION ||
+    if (mod == nullptr || mod->structSize < sizeof(DlModDescriptorV1) || mod->abiVersion != MODSDK_ABI_VERSION ||
         mod->id == nullptr || mod->id[0] == '\0' || mod->name == nullptr || mod->version == nullptr || mod->onLoad == nullptr) {
         return DLMOD_RESULT_INVALID_ARGUMENT;
     }
@@ -145,7 +145,7 @@ DlModResult DLMOD_CALL RegisterMod(const DlModDescriptorV1* mod)
     }
 }
 
-DlModResult DLMOD_CALL UnregisterMod(const char* modId)
+DlModResult MODSDK_CALL UnregisterMod(const char* modId)
 {
     if (modId == nullptr || modId[0] == '\0') {
         return DLMOD_RESULT_INVALID_ARGUMENT;
@@ -183,7 +183,7 @@ DlModResult DLMOD_CALL UnregisterMod(const char* modId)
     }
 }
 
-DlModResult DLMOD_CALL Shutdown()
+DlModResult MODSDK_CALL Shutdown()
 {
     try {
         EngineRuntime& runtime = GetRuntime();
@@ -215,7 +215,7 @@ DlModResult DLMOD_CALL Shutdown()
 
 const DlModEngineApiV1 g_engineApi = {
     sizeof(DlModEngineApiV1),
-    DLMOD_ENGINE_ABI_VERSION,
+    MODSDK_ABI_VERSION,
     &Initialize,
     &RegisterMod,
     &UnregisterMod,
@@ -224,12 +224,12 @@ const DlModEngineApiV1 g_engineApi = {
 
 }
 
-DlModResult DLMOD_CALL DlModEngine_QueryApi(uint32_t requestedAbiVersion, DlModEngineApiV1* api)
+DlModResult MODSDK_CALL ModSDK_QueryApi(uint32_t requestedAbiVersion, DlModEngineApiV1* api)
 {
     if (api == nullptr || api->structSize < sizeof(DlModEngineApiV1)) {
         return DLMOD_RESULT_INVALID_ARGUMENT;
     }
-    if (requestedAbiVersion != DLMOD_ENGINE_ABI_VERSION) {
+    if (requestedAbiVersion != MODSDK_ABI_VERSION) {
         return DLMOD_RESULT_UNSUPPORTED_ABI;
     }
 

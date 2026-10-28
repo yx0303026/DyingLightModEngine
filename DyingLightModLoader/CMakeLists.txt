@@ -26,14 +26,20 @@ add_library(DyingLightModLoader SHARED
 )
 
 target_compile_features(DyingLightModLoader PRIVATE cxx_std_20)
-target_compile_definitions(DyingLightModLoader PRIVATE DLMOD_LOADER_BUILD WIN32_LEAN_AND_MEAN NOMINMAX)
+target_compile_definitions(DyingLightModLoader PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_include_directories(DyingLightModLoader PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/../DyingLightModEngine/include"
+    "${CMAKE_CURRENT_LIST_DIR}/../SDK/include"
 )
 target_compile_options(DyingLightModLoader PRIVATE /W4 /permissive- /EHsc)
 
-if(TARGET DyingLightModEngine)
-    add_dependencies(DyingLightModLoader DyingLightModEngine)
+if(TARGET ModSDK)
+    add_dependencies(DyingLightModLoader ModSDK)
+    add_custom_command(TARGET DyingLightModLoader POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "$<TARGET_FILE:ModSDK>"
+            "$<TARGET_FILE_DIR:DyingLightModLoader>/ModSDK.dll"
+        VERBATIM
+    )
 endif()
 
 dlmod_set_output_directories(DyingLightModLoader)
