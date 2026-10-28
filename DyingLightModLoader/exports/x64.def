@@ -1,0 +1,3 @@
+LIBRARY DyingLightModLoader
+EXPORTS
+    DyingLightModLoader_Initialize
