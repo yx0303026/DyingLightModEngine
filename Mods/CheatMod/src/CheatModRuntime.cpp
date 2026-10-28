@@ -64,6 +64,17 @@ namespace cheat_mod {
 		input_.HandleKeyEvent(virtualKey, isDown);
 	}
 
+	void CheatModRuntime::HandleWindowMessage(
+		std::uintptr_t window,
+		std::uint32_t message,
+		std::uintptr_t wParam,
+		std::intptr_t lParam) noexcept
+	{
+		if (initialized_) {
+			ui_.HandleWindowMessage(window, message, wParam, lParam);
+		}
+	}
+
 	bool CheatModRuntime::IsOpen() const noexcept
 	{
 		return ui_.IsOpen();

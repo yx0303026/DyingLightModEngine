@@ -270,7 +270,9 @@ namespace {
 			api.abiVersion == MODSDK_ABI_VERSION &&
 			api.registerMod != nullptr &&
 			api.unregisterMod != nullptr &&
-			api.renderFrame != nullptr;
+			api.renderFrame != nullptr &&
+			api.isUiOpen != nullptr &&
+			api.onWindowMessage != nullptr;
 	}
 
 	DlModResult LoadModLibrary(
@@ -508,6 +510,36 @@ void EngineModManager::RenderFrame(void* graphicsContext) noexcept
 			return;
 		}
 		engineApi.renderFrame(graphicsContext);
+	}
+	catch (...) {
+	}
+}
+
+bool EngineModManager::IsUiOpen() noexcept
+{
+	try {
+		ModEngineApiV1 engineApi{};
+		if (!QueryEngineApi(engineApi)) {
+			return false;
+		}
+		return engineApi.isUiOpen() != 0U;
+	}
+	catch (...) {
+		return false;
+	}
+}
+
+void EngineModManager::OnWindowMessage(
+	uintptr_t window,
+	uint32_t message,
+	uintptr_t wParam,
+	intptr_t lParam) noexcept
+{
+	try {
+		ModEngineApiV1 engineApi{};
+		if (QueryEngineApi(engineApi)) {
+			engineApi.onWindowMessage(window, message, wParam, lParam);
+		}
 	}
 	catch (...) {
 	}

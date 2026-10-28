@@ -20,6 +20,11 @@ namespace cheat_mod {
 		void Shutdown() noexcept;
 		void RenderFrame(void* graphicsContext);
 		void HandleKeyEvent(std::uint32_t virtualKey, bool isDown) noexcept;
+		void HandleWindowMessage(
+			std::uintptr_t window,
+			std::uint32_t message,
+			std::uintptr_t wParam,
+			std::intptr_t lParam) noexcept;
 		bool IsOpen() const noexcept;
 
 	private:

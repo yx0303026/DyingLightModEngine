@@ -38,18 +38,10 @@ void EngineGraphicsRuntime::Shutdown() noexcept
 	if (!initialized_ && swapChain_ == nullptr && window_ == nullptr) {
 		return;
 	}
+	input_.Shutdown();
 	hook_.Uninstall();
 	DestroyDummySwapChain();
 	initialized_ = false;
-}
-
-LRESULT CALLBACK EngineGraphicsRuntime::WindowProc(
-	HWND window,
-	UINT message,
-	WPARAM wParam,
-	LPARAM lParam)
-{
-	return DefWindowProcW(window, message, wParam, lParam);
 }
 
 bool EngineGraphicsRuntime::CreateDummySwapChain() noexcept
@@ -134,5 +126,7 @@ void EngineGraphicsRuntime::RenderFrame() noexcept
 	if (swapChain == nullptr) {
 		return;
 	}
+	input_.AttachSwapChain(swapChain);
 	EngineModManager::RenderFrame(swapChain);
+	input_.RefreshUiState();
 }

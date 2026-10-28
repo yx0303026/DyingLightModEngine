@@ -23,11 +23,16 @@ FetchContent_Declare(
     GIT_TAG v1.3.4
     GIT_SHALLOW TRUE
 )
-FetchContent_GetProperties(DearImGui)
-if(NOT dearimgui_POPULATED)
-    FetchContent_Populate(DearImGui)
-endif()
-FetchContent_MakeAvailable(MinHook)
+FetchContent_MakeAvailable(DearImGui)
+
+function(dlmod_make_min_hook_available)
+    # MinHook still declares compatibility with CMake versions below 3.10.
+    # Raise its policy baseline without changing the third-party source tree.
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
+    FetchContent_MakeAvailable(MinHook)
+endfunction()
+
+dlmod_make_min_hook_available()
 
 add_library(DearImGui STATIC
     "${dearimgui_SOURCE_DIR}/imgui.cpp"
@@ -95,11 +100,13 @@ add_library(DyingLightModEngine SHARED
     "src/EngineLogger.cpp"
     "src/EngineModManager.cpp"
     "src/EngineGraphicsRuntime.cpp"
+    "src/EngineInputRuntime.cpp"
     "include/EngineHost.h"
     "include/EngineAbi.h"
     "include/EngineLogger.h"
     "include/EngineModManager.h"
     "include/EngineGraphicsRuntime.h"
+    "include/EngineInputRuntime.h"
     "${DLMOD_ENGINE_DEF}"
 )
 

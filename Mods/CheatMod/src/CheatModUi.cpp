@@ -5,6 +5,12 @@
 
 #include <functional>
 
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
+	HWND window,
+	UINT message,
+	WPARAM wParam,
+	LPARAM lParam);
+
 namespace cheat_mod {
 
 	bool CheatModUi::Initialize()
@@ -23,7 +29,7 @@ namespace cheat_mod {
 		ShutdownGraphics();
 		navigation_.reset();
 		context_.Destroy();
-		open_ = false;
+		open_.store(false);
 	}
 
 	void CheatModUi::Render(void* graphicsContext)
@@ -36,16 +42,19 @@ namespace cheat_mod {
 		if (!InitializeGraphics(graphicsContext)) {
 			return;
 		}
+		bool open = open_.load();
+		ImGui::GetIO().MouseDrawCursor = open;
 		ImGui_ImplDX11_NewFrame();
 		ImGui_ImplWin32_NewFrame();
 		context_.BeginFrame();
-		if (open_) {
+		if (open) {
 			ImGui::SetNextWindowSize(ImVec2(760.0F, 520.0F), ImGuiCond_FirstUseEver);
-			if (ImGui::Begin("Cheat Mod", &open_, ImGuiWindowFlags_NoCollapse)) {
+			if (ImGui::Begin("Cheat Mod", &open, ImGuiWindowFlags_NoCollapse)) {
 				context_.Render(*navigation_);
 			}
 			ImGui::End();
 		}
+		open_.store(open);
 		context_.EndFrame();
 		deviceContext_->OMSetRenderTargets(1, &renderTarget_, nullptr);
 		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -53,17 +62,34 @@ namespace cheat_mod {
 
 	bool CheatModUi::IsOpen() const noexcept
 	{
-		return open_;
+		return open_.load();
 	}
 
 	void CheatModUi::SetOpen(bool open) noexcept
 	{
-		open_ = open;
+		open_.store(open);
 	}
 
 	void CheatModUi::Toggle() noexcept
 	{
-		open_ = !open_;
+		open_.exchange(!open_.load());
+	}
+
+	void CheatModUi::HandleWindowMessage(
+		std::uintptr_t window,
+		std::uint32_t message,
+		std::uintptr_t wParam,
+		std::intptr_t lParam) noexcept
+	{
+		if (!graphicsInitialized_ || !context_.IsCreated()) {
+			return;
+		}
+		ImGui::SetCurrentContext(context_.GetNativeContext());
+		ImGui_ImplWin32_WndProcHandler(
+			reinterpret_cast<HWND>(window),
+			static_cast<UINT>(message),
+			static_cast<WPARAM>(wParam),
+			static_cast<LPARAM>(lParam));
 	}
 
 	void CheatModUi::BuildNavigation()

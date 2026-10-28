@@ -49,6 +49,14 @@ extern "C" {
 	typedef void(MODSDK_CALL* DlModOnRenderFrameFn)(
 		void* modContext,
 		void* graphicsContext);
+	typedef uint8_t(MODSDK_CALL* DlModIsUiOpenFn)(
+		void* modContext);
+	typedef void(MODSDK_CALL* DlModOnWindowMessageFn)(
+		void* modContext,
+		uintptr_t window,
+		uint32_t message,
+		uintptr_t wParam,
+		intptr_t lParam);
 
 	/* String fields are copied during registration; context remains owned by the mod until unload. */
 	typedef struct DlModDescriptorV1 {
@@ -64,6 +72,10 @@ extern "C" {
 		const char* logName;
 		/* Optional callback invoked from the host graphics presentation thread. */
 		DlModOnRenderFrameFn onRenderFrame;
+		/* Optional UI state callback used by the engine input router. */
+		DlModIsUiOpenFn isUiOpen;
+		/* Optional Win32 message callback used to feed the UI backend. */
+		DlModOnWindowMessageFn onWindowMessage;
 	} DlModDescriptorV1;
 
 #define DLMOD_DESCRIPTOR_V1_MIN_SIZE ((uint32_t)offsetof(DlModDescriptorV1, logName))
@@ -85,6 +97,12 @@ extern "C" {
 	typedef DlModResult(MODSDK_CALL* ModEngineShutdownFn)(void);
 	typedef void(MODSDK_CALL* ModEngineRenderFrameFn)(
 		void* graphicsContext);
+	typedef uint8_t(MODSDK_CALL* ModEngineIsUiOpenFn)(void);
+	typedef void(MODSDK_CALL* ModEngineOnWindowMessageFn)(
+		uintptr_t window,
+		uint32_t message,
+		uintptr_t wParam,
+		intptr_t lParam);
 
 	typedef struct ModEngineApiV1 {
 		uint32_t structSize;
@@ -94,6 +112,8 @@ extern "C" {
 		ModEngineUnregisterModFn unregisterMod;
 		ModEngineShutdownFn shutdown;
 		ModEngineRenderFrameFn renderFrame;
+		ModEngineIsUiOpenFn isUiOpen;
+		ModEngineOnWindowMessageFn onWindowMessage;
 	} ModEngineApiV1;
 
 	typedef DlModResult(MODSDK_CALL* ModSDKQueryApiFn)(

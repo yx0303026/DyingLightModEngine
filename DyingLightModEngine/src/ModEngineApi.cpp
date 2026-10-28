@@ -20,6 +20,8 @@ namespace {
 		void* context = nullptr;
 		DlModOnUnloadFn onUnload = nullptr;
 		DlModOnRenderFrameFn onRenderFrame = nullptr;
+		DlModIsUiOpenFn isUiOpen = nullptr;
+		DlModOnWindowMessageFn onWindowMessage = nullptr;
 		void* logContext = nullptr;
 		ModState state = ModState::Loading;
 	};
@@ -135,6 +137,14 @@ namespace {
 				}
 				const DlModOnRenderFrameFn onRenderFrame =
 					mod->structSize >= sizeof(DlModDescriptorV1) ? mod->onRenderFrame : nullptr;
+				const DlModIsUiOpenFn isUiOpen =
+					mod->structSize >= offsetof(DlModDescriptorV1, isUiOpen) + sizeof(DlModIsUiOpenFn)
+					? mod->isUiOpen
+					: nullptr;
+				const DlModOnWindowMessageFn onWindowMessage =
+					mod->structSize >= offsetof(DlModDescriptorV1, onWindowMessage) + sizeof(DlModOnWindowMessageFn)
+					? mod->onWindowMessage
+					: nullptr;
 				runtime.mods.push_back({
 					id,
 					mod->name,
@@ -142,6 +152,8 @@ namespace {
 					mod->context,
 					mod->onUnload,
 					onRenderFrame,
+					isUiOpen,
+					onWindowMessage,
 					logContext,
 					ModState::Loading
 				});
@@ -279,6 +291,63 @@ namespace {
 		}
 	}
 
+	uint8_t MODSDK_CALL IsUiOpen()
+	{
+		EngineRuntime& runtime = GetRuntime();
+		const std::lock_guard<std::recursive_mutex> lifecycleGuard(runtime.lifecycleLock);
+		std::vector<ModRecord> mods;
+		{
+			const ExclusiveLockGuard stateGuard(runtime.lock);
+			if (!runtime.initialized) {
+				return 0U;
+			}
+			mods = runtime.mods;
+		}
+
+		for (const ModRecord& mod : mods) {
+			if (mod.state != ModState::Loaded || mod.isUiOpen == nullptr) {
+				continue;
+			}
+			try {
+				if (mod.isUiOpen(mod.context) != 0U) {
+					return 1U;
+				}
+			}
+			catch (...) {
+			}
+		}
+		return 0U;
+	}
+
+	void MODSDK_CALL OnWindowMessage(
+		uintptr_t window,
+		uint32_t message,
+		uintptr_t wParam,
+		intptr_t lParam)
+	{
+		EngineRuntime& runtime = GetRuntime();
+		const std::lock_guard<std::recursive_mutex> lifecycleGuard(runtime.lifecycleLock);
+		std::vector<ModRecord> mods;
+		{
+			const ExclusiveLockGuard stateGuard(runtime.lock);
+			if (!runtime.initialized) {
+				return;
+			}
+			mods = runtime.mods;
+		}
+
+		for (const ModRecord& mod : mods) {
+			if (mod.state != ModState::Loaded || mod.onWindowMessage == nullptr) {
+				continue;
+			}
+			try {
+				mod.onWindowMessage(mod.context, window, message, wParam, lParam);
+			}
+			catch (...) {
+			}
+		}
+	}
+
 	const ModEngineApiV1 g_engineApi = {
 		sizeof(ModEngineApiV1),
 		MODSDK_ABI_VERSION,
@@ -286,7 +355,9 @@ namespace {
 		&RegisterMod,
 		&UnregisterMod,
 		&Shutdown,
-		&RenderFrame
+		&RenderFrame,
+		&IsUiOpen,
+		&OnWindowMessage
 	};
 
 }

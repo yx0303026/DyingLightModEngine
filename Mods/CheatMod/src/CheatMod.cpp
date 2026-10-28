@@ -23,6 +23,23 @@ namespace {
 		}
 	}
 
+	uint8_t MODSDK_CALL OnIsUiOpen(void* modContext)
+	{
+		return modContext == &g_runtime && g_runtime.IsOpen() ? 1U : 0U;
+	}
+
+	void MODSDK_CALL OnWindowMessage(
+		void* modContext,
+		uintptr_t window,
+		uint32_t message,
+		uintptr_t wParam,
+		intptr_t lParam)
+	{
+		if (modContext == &g_runtime) {
+			g_runtime.HandleWindowMessage(window, message, wParam, lParam);
+		}
+	}
+
 }
 
 extern "C" DlModResult MODSDK_CALL ModSDK_QueryMod(
@@ -46,7 +63,9 @@ extern "C" DlModResult MODSDK_CALL ModSDK_QueryMod(
 		&OnLoad,
 		&OnUnload,
 		"CheatMod",
-		&OnRenderFrame
+		&OnRenderFrame,
+		&OnIsUiOpen,
+		&OnWindowMessage
 	};
 	return DLMOD_RESULT_SUCCESS;
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "EngineInputRuntime.h"
 #include "dl_imgui/dx11_hook.h"
 
 #include <Windows.h>
@@ -16,7 +17,6 @@ public:
 	void Shutdown() noexcept;
 
 private:
-	static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 	bool CreateDummySwapChain() noexcept;
 	void DestroyDummySwapChain() noexcept;
 	void RenderFrame() noexcept;
@@ -24,6 +24,7 @@ private:
 	HWND window_ = nullptr;
 	IDXGISwapChain* swapChain_ = nullptr;
 	dl::imgui::Dx11Hook hook_;
+	EngineInputRuntime input_;
 	bool windowClassRegistered_ = false;
 	bool initialized_ = false;
 };

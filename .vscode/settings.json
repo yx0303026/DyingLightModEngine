@@ -1,0 +1,14 @@
+{
+  "files.exclude": {
+    "**/out": true,
+    "**/lib": true,
+    "**/build": true,
+    "**/.vs": true,
+    "**/bin": true,
+    "**/CMakeFiles": true,
+    "**/.cache": true,
+    "**/.git": true,
+    "out": true,
+  },
+  "explorer.excludeGitIgnore": true
+}

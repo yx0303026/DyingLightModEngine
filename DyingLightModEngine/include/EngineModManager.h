@@ -25,6 +25,12 @@ public:
 	static MODSDK_API DlModResult UnloadAll() noexcept;
 	static MODSDK_API uint32_t GetLoadedCount() noexcept;
 	static MODSDK_API void RenderFrame(void* graphicsContext) noexcept;
+	static MODSDK_API bool IsUiOpen() noexcept;
+	static MODSDK_API void OnWindowMessage(
+		uintptr_t window,
+		uint32_t message,
+		uintptr_t wParam,
+		intptr_t lParam) noexcept;
 };
 
 #endif

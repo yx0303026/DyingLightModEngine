@@ -25,7 +25,8 @@ bool InitializeModEngine(HMODULE engineModule) noexcept
 		engineApi.abiVersion != MODSDK_ABI_VERSION ||
 		engineApi.initialize == nullptr || engineApi.registerMod == nullptr ||
 		engineApi.unregisterMod == nullptr || engineApi.shutdown == nullptr ||
-		engineApi.renderFrame == nullptr) {
+		engineApi.renderFrame == nullptr || engineApi.isUiOpen == nullptr ||
+		engineApi.onWindowMessage == nullptr) {
 		OutputDebugStringA("[DyingLightModEngine] Engine ABI negotiation failed\n");
 		return false;
 	}
@@ -63,7 +64,8 @@ bool ShutdownModEngine() noexcept
 	if (ModSDK_QueryApi(MODSDK_ABI_VERSION, &engineApi) != DLMOD_RESULT_SUCCESS ||
 		engineApi.structSize < sizeof(ModEngineApiV1) ||
 		engineApi.abiVersion != MODSDK_ABI_VERSION ||
-		engineApi.shutdown == nullptr) {
+		engineApi.shutdown == nullptr || engineApi.isUiOpen == nullptr ||
+		engineApi.onWindowMessage == nullptr) {
 		return false;
 	}
 

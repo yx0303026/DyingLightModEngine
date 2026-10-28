@@ -7,6 +7,8 @@
 
 #include <functional>
 #include <memory>
+#include <atomic>
+#include <cstdint>
 
 namespace cheat_mod {
 
@@ -20,6 +22,11 @@ namespace cheat_mod {
 		bool Initialize();
 		void Shutdown() noexcept;
 		void Render(void* graphicsContext);
+		void HandleWindowMessage(
+			std::uintptr_t window,
+			std::uint32_t message,
+			std::uintptr_t wParam,
+			std::intptr_t lParam) noexcept;
 		bool IsOpen() const noexcept;
 		void SetOpen(bool open) noexcept;
 		void Toggle() noexcept;
@@ -42,7 +49,7 @@ namespace cheat_mod {
 		ID3D11DeviceContext* deviceContext_ = nullptr;
 		ID3D11RenderTargetView* renderTarget_ = nullptr;
 		HWND window_ = nullptr;
-		bool open_ = false;
+		std::atomic_bool open_ = false;
 		bool graphicsInitialized_ = false;
 		bool godModeEnabled_ = false;
 		bool infiniteStaminaEnabled_ = false;
