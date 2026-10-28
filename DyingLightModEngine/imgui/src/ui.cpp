@@ -235,10 +235,12 @@ namespace dl::imgui {
 		state.structSize = sizeof(state);
 		state.abiVersion = MODSDK_ABI_VERSION;
 		if (mouseStateProvider_(&state) == 0U) {
+			ImGui::GetIO().MouseDrawCursor = false;
 			return;
 		}
 
 		ImGuiIO& io = ImGui::GetIO();
+		io.MouseDrawCursor = true;
 		if ((state.flags & DLMOD_UI_MOUSE_POSITION_VALID) != 0U) {
 			io.AddMousePosEvent(
 				static_cast<float>(state.positionX),

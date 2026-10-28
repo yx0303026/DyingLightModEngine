@@ -50,7 +50,6 @@ namespace cheat_mod {
 			return;
 		}
 		bool open = open_.load();
-		ImGui::GetIO().MouseDrawCursor = open;
 		ImGui_ImplDX11_NewFrame();
 		ImGui_ImplWin32_NewFrame();
 		context_.BeginFrame();
