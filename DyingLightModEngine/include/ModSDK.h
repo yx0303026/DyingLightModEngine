@@ -78,6 +78,7 @@ extern "C" {
 
 #pragma region Logger
 
+#ifdef __cplusplus
 enum class ModSDKLogLevel : uint32_t {
 	Trace = 0,
 	Debug = 1,
@@ -87,18 +88,25 @@ enum class ModSDKLogLevel : uint32_t {
 	Critical = 5
 };
 
-class MODSDK_API Logger final {
+class Logger final {
 public:
-	static void Log(ModSDKLogLevel level, const char* message) noexcept;
-	static void Logf(ModSDKLogLevel level, const char* format, ...) noexcept;
+	static MODSDK_API void Log(ModSDKLogLevel level, const char* message) noexcept;
+	static MODSDK_API void Logf(ModSDKLogLevel level, const char* format, ...) noexcept;
 
-	static void Trace(const char* message) noexcept;
-	static void Debug(const char* message) noexcept;
-	static void Info(const char* message) noexcept;
-	static void Warning(const char* message) noexcept;
-	static void Error(const char* message) noexcept;
-	static void Critical(const char* message) noexcept;
+	static MODSDK_API void Trace(const char* message) noexcept;
+	static MODSDK_API void Debug(const char* message) noexcept;
+	static MODSDK_API void Info(const char* message) noexcept;
+	static MODSDK_API void Warning(const char* message) noexcept;
+	static MODSDK_API void Error(const char* message) noexcept;
+	static MODSDK_API void Critical(const char* message) noexcept;
 };
+#endif
 
 #pragma endregion
 
+
+#pragma region ModManager
+
+
+
+#pragma endregion

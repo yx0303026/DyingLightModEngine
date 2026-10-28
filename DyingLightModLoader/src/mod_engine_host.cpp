@@ -1,20 +1,9 @@
 #include "loader_runtime.h"
-
-namespace {
-
-void MODSDK_CALL HostLog(void*, uint32_t, const char* message)
-{
-    if (message != nullptr) {
-        OutputDebugStringA("[DyingLightModLoader] ");
-        OutputDebugStringA(message);
-        OutputDebugStringA("\n");
-    }
-}
-
-}
+#include "host_logger.h"
 
 void InitializeModEngine(LoaderRuntime& runtime)
 {
+    InitializeHostLogger(runtime.moduleHandle);
     runtime.engineApi.structSize = sizeof(runtime.engineApi);
     if (ModSDK_QueryApi(MODSDK_ABI_VERSION, &runtime.engineApi) != DLMOD_RESULT_SUCCESS ||
         runtime.engineApi.structSize < sizeof(DlModEngineApiV1) ||

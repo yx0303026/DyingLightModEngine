@@ -1,4 +1,4 @@
-#include "modsdk_runtime.h"
+#include "runtime/modsdk_runtime.h"
 
 #include <cstdarg>
 #include <cstdio>
@@ -12,7 +12,10 @@ void Logger::Log(ModSDKLogLevel level, const char* message) noexcept
 	DlModLogFn hostLogger = nullptr;
 	void* hostContext = nullptr;
 	if (ModSDK_GetHostLogger(&hostLogger, &hostContext)) {
-		hostLogger(hostContext, static_cast<uint32_t>(level), message);
+		try {
+			hostLogger(hostContext, static_cast<uint32_t>(level), message);
+		} catch (...) {
+		}
 	}
 }
 

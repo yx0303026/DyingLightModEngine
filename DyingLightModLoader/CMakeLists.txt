@@ -18,6 +18,8 @@ else()
 endif()
 
 add_library(DyingLightModLoader SHARED
+    "src/host_logger.cpp"
+    "src/host_logger.h"
     "src/loader_entry.cpp"
     "src/loader_runtime.cpp"
     "src/mod_engine_host.cpp"

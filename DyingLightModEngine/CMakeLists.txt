@@ -20,7 +20,7 @@ endif()
 add_library(ModSDK SHARED
     "src/dl_mod_engine_api.cpp"
     "src/dl_mod_engine_logger.cpp"
-    "src/modsdk_runtime.h"
+    "include/runtime/modsdk_runtime.h"
     "include/ModSDK.h"
     "${DLMOD_ENGINE_DEF}"
 )
