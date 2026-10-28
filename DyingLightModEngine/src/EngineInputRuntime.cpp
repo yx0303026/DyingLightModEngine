@@ -1,5 +1,6 @@
 #include "EngineInputRuntime.h"
 
+#include "EngineDirectInputRuntime.h"
 #include "EngineModManager.h"
 
 #include <dxgi.h>
@@ -32,11 +33,37 @@ void EngineInputRuntime::AttachSwapChain(void* graphicsContext) noexcept
 
 void EngineInputRuntime::RefreshUiState() noexcept
 {
+	RefreshWindowHook();
 	const bool uiOpen = EngineModManager::IsUiOpen();
 	const bool previousState = uiOpen_.exchange(uiOpen);
+	EngineDirectInputRuntime::SetUiActive(uiOpen);
 	if (previousState != uiOpen && gameWindow_ != nullptr) {
 		PostMessageW(gameWindow_, kApplyUiInputStateMessage, 0, 0);
 	}
+}
+
+void EngineInputRuntime::RefreshWindowHook() noexcept
+{
+	if (gameWindow_ == nullptr) {
+		return;
+	}
+	if (GetWindowLongPtrW(gameWindow_, GWLP_WNDPROC) ==
+		reinterpret_cast<LONG_PTR>(&WindowProc)) {
+		return;
+	}
+	/* The game or another overlay replaced the window proc; take it back. */
+	SetLastError(ERROR_SUCCESS);
+	const LONG_PTR previous = SetWindowLongPtrW(
+		gameWindow_,
+		GWLP_WNDPROC,
+		reinterpret_cast<LONG_PTR>(&WindowProc));
+	if (previous == 0 && GetLastError() != ERROR_SUCCESS) {
+		return;
+	}
+	if (previous != reinterpret_cast<LONG_PTR>(&WindowProc)) {
+		originalWindowProc_ = reinterpret_cast<WNDPROC>(previous);
+	}
+	g_activeRuntime = this;
 }
 
 void EngineInputRuntime::Shutdown() noexcept
@@ -76,6 +103,7 @@ void EngineInputRuntime::AttachGameWindow(HWND window) noexcept
 	originalWindowProc_ = reinterpret_cast<WNDPROC>(original);
 	gameWindowHookInstalled_ = true;
 	g_activeRuntime = this;
+	EngineDirectInputRuntime::SetGameWindow(window);
 }
 
 void EngineInputRuntime::DetachGameWindow() noexcept
@@ -100,6 +128,8 @@ void EngineInputRuntime::DetachGameWindow() noexcept
 	if (g_activeRuntime == this) {
 		g_activeRuntime = nullptr;
 	}
+	EngineDirectInputRuntime::SetUiActive(false);
+	EngineDirectInputRuntime::SetGameWindow(nullptr);
 	if (windowThread == GetCurrentThreadId()) {
 		ApplyUiInputState(false);
 	}
@@ -121,8 +151,7 @@ LRESULT EngineInputRuntime::HandleWindowMessage(
 		return 0;
 	}
 
-	const bool uiOpen = EngineModManager::IsUiOpen();
-	uiOpen_.store(uiOpen);
+	const bool uiOpen = uiOpen_.load(std::memory_order_relaxed);
 	ApplyUiInputState(uiOpen);
 	EngineModManager::OnWindowMessage(
 		reinterpret_cast<uintptr_t>(window),

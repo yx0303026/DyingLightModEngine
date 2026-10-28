@@ -35,12 +35,43 @@ extern "C" {
 
 	typedef void(MODSDK_CALL* EngineLogCallback)(void* context, uint32_t level, const char* message);
 
+#define DLMOD_UI_MOUSE_POSITION_VALID 0x1u
+#define DLMOD_UI_MOUSE_DEVICE_CAPTURED 0x2u
+
+	/*
+	 * Mouse state sampled from the game's DirectInput mouse device while a mod UI
+	 * is open. Games that read the mouse through DirectInput keep receiving the
+	 * device state even when window messages are filtered, so the engine neutralizes
+	 * that device and forwards its relative motion to the UI instead.
+	 */
+	typedef struct DlModUiMouseStateV1 {
+		uint32_t structSize;
+		uint32_t abiVersion;
+		uint32_t flags;
+		/* Client-space cursor position, valid when DLMOD_UI_MOUSE_POSITION_VALID is set. */
+		int32_t positionX;
+		int32_t positionY;
+		/* Wheel notches accumulated since the previous call. */
+		float wheelDelta;
+		/* Pressed buttons: bit0 left, bit1 right, bit2 middle, bit3 X1, bit4 X2. */
+		uint32_t buttons;
+	} DlModUiMouseStateV1;
+
+	/* Returns 1 when the state was filled, 0 when no DirectInput mouse is captured. */
+	typedef uint8_t(MODSDK_CALL* ModEngineGetUiMouseStateFn)(
+		DlModUiMouseStateV1* state);
+
 	typedef struct DlModHostApiV1 {
 		uint32_t structSize;
 		uint32_t abiVersion;
 		void* context;
 		EngineLogCallback log;
+		/* Optional DirectInput mouse bridge; null when the engine predates it. */
+		ModEngineGetUiMouseStateFn getUiMouseState;
 	} DlModHostApiV1;
+
+#define DLMOD_HOST_API_V1_MOUSE_STATE_SIZE \
+	((uint32_t)(offsetof(DlModHostApiV1, getUiMouseState) + sizeof(ModEngineGetUiMouseStateFn)))
 
 	typedef DlModResult(MODSDK_CALL* DlModOnLoadFn)(
 		void* modContext,

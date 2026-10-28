@@ -1,6 +1,7 @@
 #include "EngineHost.h"
 
 #include "EngineAbi.h"
+#include "EngineDirectInputRuntime.h"
 #include "EngineGraphicsRuntime.h"
 #include "EngineLogger.h"
 #include "EngineModManager.h"
@@ -35,11 +36,16 @@ bool InitializeModEngine(HMODULE engineModule) noexcept
 		sizeof(DlModHostApiV1),
 		MODSDK_ABI_VERSION,
 		nullptr,
-		&EngineLogger::HostCallback
+		&EngineLogger::HostCallback,
+		&EngineDirectInputRuntime::GetUiMouseState
 	};
 	if (engineApi.initialize(&hostApi) != DLMOD_RESULT_SUCCESS) {
 		OutputDebugStringA("[DyingLightModEngine] Engine initialization failed\n");
 		return false;
+	}
+
+	if (!EngineDirectInputRuntime::Install()) {
+		EngineLogger::Warning("DirectInput mouse hook initialization failed; mod UI input falls back to window messages.");
 	}
 
 	const DlModResult loadResult = EngineModManager::LoadAll();
@@ -70,6 +76,7 @@ bool ShutdownModEngine() noexcept
 	}
 
 	g_graphicsRuntime.Shutdown();
+	EngineDirectInputRuntime::Uninstall();
 	const DlModResult unloadResult = EngineModManager::UnloadAll();
 	if (unloadResult != DLMOD_RESULT_SUCCESS) {
 		EngineLogger::Error("Could not unload all mods; engine shutdown was cancelled.");

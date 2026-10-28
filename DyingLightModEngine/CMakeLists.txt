@@ -101,12 +101,14 @@ add_library(DyingLightModEngine SHARED
     "src/EngineModManager.cpp"
     "src/EngineGraphicsRuntime.cpp"
     "src/EngineInputRuntime.cpp"
+    "src/EngineDirectInputRuntime.cpp"
     "include/EngineHost.h"
     "include/EngineAbi.h"
     "include/EngineLogger.h"
     "include/EngineModManager.h"
     "include/EngineGraphicsRuntime.h"
     "include/EngineInputRuntime.h"
+    "include/EngineDirectInputRuntime.h"
     "${DLMOD_ENGINE_DEF}"
 )
 
@@ -116,7 +118,7 @@ target_include_directories(DyingLightModEngine
     PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include"
 )
 target_compile_options(DyingLightModEngine PRIVATE /W4 /permissive- /EHsc)
-target_link_libraries(DyingLightModEngine PRIVATE DyingLightModEngineImGui d3d11 dxgi)
+target_link_libraries(DyingLightModEngine PRIVATE DyingLightModEngineImGui minhook d3d11 dxgi dxguid)
 set_target_properties(DyingLightModEngine PROPERTIES OUTPUT_NAME "DyingLightModEngine")
 
 dlmod_set_output_directories(DyingLightModEngine)

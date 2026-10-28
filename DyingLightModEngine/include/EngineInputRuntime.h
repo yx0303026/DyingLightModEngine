@@ -20,6 +20,7 @@ private:
 	static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 	void AttachGameWindow(HWND window) noexcept;
 	void DetachGameWindow() noexcept;
+	void RefreshWindowHook() noexcept;
 	LRESULT HandleWindowMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
 	void ApplyUiInputState(bool uiOpen) noexcept;
 	static bool IsBlockedInputMessage(UINT message) noexcept;

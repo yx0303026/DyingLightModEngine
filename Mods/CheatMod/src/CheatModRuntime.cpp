@@ -23,6 +23,9 @@ namespace cheat_mod {
 
 		hostContext_ = hostApi->context;
 		hostLog_ = hostApi->log;
+		if (hostApi->structSize >= DLMOD_HOST_API_V1_MOUSE_STATE_SIZE) {
+			ui_.SetUiMouseStateProvider(hostApi->getUiMouseState);
+		}
 		initialized_ = true;
 		if (!input_.Start()) {
 			ui_.Shutdown();
@@ -42,6 +45,7 @@ namespace cheat_mod {
 
 		input_.Stop();
 		ui_.Shutdown();
+		ui_.SetUiMouseStateProvider(nullptr);
 		if (hostLog_ != nullptr) {
 			hostLog_(hostContext_, static_cast<uint32_t>(EngineLogLevel::Info), "Cheat Mod unloaded.");
 		}

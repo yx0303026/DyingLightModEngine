@@ -22,6 +22,17 @@ function(dlmod_set_output_directories target)
         ARCHIVE_OUTPUT_DIRECTORY "${_output_root}"
     )
 
+    if(ARGC GREATER 1)
+        set(_build_output_root "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../build/${_architecture}")
+        get_filename_component(_build_output_root "${_build_output_root}" ABSOLUTE)
+        add_custom_command(TARGET ${target} POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${_build_output_root}/$<CONFIG>"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "$<TARGET_FILE:${target}>"
+                "${_build_output_root}/$<CONFIG>/$<TARGET_FILE_NAME:${target}>"
+        )
+    endif()
+
     foreach(_configuration DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
         set_target_properties(${target} PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY_${_configuration} "${_output_root}/${_configuration}"

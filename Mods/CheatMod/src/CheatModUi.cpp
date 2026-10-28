@@ -1,5 +1,7 @@
 #include "CheatModUi.h"
 
+#include <Windows.h>
+
 #include <imgui_impl_dx11.h>
 #include <imgui_impl_win32.h>
 
@@ -18,6 +20,11 @@ namespace cheat_mod {
 		if (navigation_ != nullptr || !context_.Create()) {
 			return false;
 		}
+
+		ImGui::SetCurrentContext(context_.GetNativeContext());
+		/* Engine-fed mouse events are injected after the Win32 backend samples the
+		 * frozen system cursor, so later events must win inside a single frame. */
+		ImGui::GetIO().ConfigInputTrickleEventQueue = false;
 
 		navigation_ = std::make_unique<dl::imgui::NavigationView>(180.0F);
 		BuildNavigation();
@@ -46,6 +53,12 @@ namespace cheat_mod {
 		ImGui::GetIO().MouseDrawCursor = open;
 		ImGui_ImplDX11_NewFrame();
 		ImGui_ImplWin32_NewFrame();
+		if (open) {
+			ApplyEngineMouseState();
+		}
+		else {
+			engineMouse_.store(false);
+		}
 		context_.BeginFrame();
 		if (open) {
 			ImGui::SetNextWindowSize(ImVec2(760.0F, 520.0F), ImGuiCond_FirstUseEver);
@@ -84,12 +97,74 @@ namespace cheat_mod {
 		if (!graphicsInitialized_ || !context_.IsCreated()) {
 			return;
 		}
+		if (open_.load() && engineMouse_.load() && IsMouseMessage(message)) {
+			/* The DirectInput bridge owns the pointer while the game cursor is frozen. */
+			return;
+		}
 		ImGui::SetCurrentContext(context_.GetNativeContext());
 		ImGui_ImplWin32_WndProcHandler(
 			reinterpret_cast<HWND>(window),
 			static_cast<UINT>(message),
 			static_cast<WPARAM>(wParam),
 			static_cast<LPARAM>(lParam));
+	}
+
+	void CheatModUi::SetUiMouseStateProvider(ModEngineGetUiMouseStateFn provider) noexcept
+	{
+		getUiMouseState_ = provider;
+	}
+
+	void CheatModUi::ApplyEngineMouseState() noexcept
+	{
+		if (getUiMouseState_ == nullptr) {
+			engineMouse_.store(false);
+			return;
+		}
+		DlModUiMouseStateV1 state{};
+		state.structSize = sizeof(state);
+		state.abiVersion = MODSDK_ABI_VERSION;
+		if (getUiMouseState_(&state) == 0U ||
+			(state.flags & DLMOD_UI_MOUSE_DEVICE_CAPTURED) == 0U) {
+			engineMouse_.store(false);
+			return;
+		}
+		ImGuiIO& io = ImGui::GetIO();
+		if ((state.flags & DLMOD_UI_MOUSE_POSITION_VALID) != 0U) {
+			io.AddMousePosEvent(
+				static_cast<float>(state.positionX),
+				static_cast<float>(state.positionY));
+		}
+		for (int button = 0; button < 5; ++button) {
+			io.AddMouseButtonEvent(button, (state.buttons & (1U << button)) != 0U);
+		}
+		if (state.wheelDelta != 0.0F) {
+			io.AddMouseWheelEvent(0.0F, state.wheelDelta);
+		}
+		engineMouse_.store(true);
+	}
+
+	bool CheatModUi::IsMouseMessage(std::uint32_t message) noexcept
+	{
+		switch (message) {
+		case WM_MOUSEMOVE:
+		case WM_LBUTTONDOWN:
+		case WM_LBUTTONUP:
+		case WM_LBUTTONDBLCLK:
+		case WM_RBUTTONDOWN:
+		case WM_RBUTTONUP:
+		case WM_RBUTTONDBLCLK:
+		case WM_MBUTTONDOWN:
+		case WM_MBUTTONUP:
+		case WM_MBUTTONDBLCLK:
+		case WM_XBUTTONDOWN:
+		case WM_XBUTTONUP:
+		case WM_XBUTTONDBLCLK:
+		case WM_MOUSEWHEEL:
+		case WM_MOUSEHWHEEL:
+			return true;
+		default:
+			return false;
+		}
 	}
 
 	void CheatModUi::BuildNavigation()
