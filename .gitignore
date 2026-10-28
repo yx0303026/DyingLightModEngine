@@ -20,3 +20,5 @@ CMakeUserPresets.json
 /.vs
 /build
 /out
+/DyingLightModEngine/bin
+/DyingLightModEngine/lib

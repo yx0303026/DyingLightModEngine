@@ -2,7 +2,7 @@
 
 #include <Windows.h>
 
-#include "dl_mod_engine_api.h"
+#include "ModSDK.h"
 
 struct LoaderRuntime {
     HMODULE moduleHandle = nullptr;

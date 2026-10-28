@@ -27,9 +27,8 @@ function(dlmod_set_output_directories target)
     endforeach()
 endfunction()
 
-function(dlmod_set_sdk_output_directories target)
-    set(_sdk_root "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../SDK")
-    get_filename_component(_sdk_root "${_sdk_root}" ABSOLUTE)
+function(dlmod_set_sdk_output_directories target sdk_root)
+    get_filename_component(_sdk_root "${sdk_root}" ABSOLUTE)
 
     file(MAKE_DIRECTORY "${_sdk_root}/bin" "${_sdk_root}/lib" "${_sdk_root}/include")
 

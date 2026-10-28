@@ -1,4 +1,4 @@
-#include "ModSDK.h"
+#include "modsdk_runtime.h"
 
 #include <Windows.h>
 #include <mutex>
@@ -235,4 +235,21 @@ DlModResult MODSDK_CALL ModSDK_QueryApi(uint32_t requestedAbiVersion, DlModEngin
 
     *api = g_engineApi;
     return DLMOD_RESULT_SUCCESS;
+}
+
+bool ModSDK_GetHostLogger(DlModLogFn* logger, void** context) noexcept
+{
+	if (logger == nullptr || context == nullptr) {
+		return false;
+	}
+
+	EngineRuntime& runtime = GetRuntime();
+	const ExclusiveLockGuard stateGuard(runtime.lock);
+	if (!runtime.initialized || runtime.hostApi.log == nullptr) {
+		return false;
+	}
+
+	*logger = runtime.hostApi.log;
+	*context = runtime.hostApi.context;
+	return true;
 }

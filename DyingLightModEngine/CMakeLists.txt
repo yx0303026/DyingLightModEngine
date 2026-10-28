@@ -1,6 +1,6 @@
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     cmake_minimum_required(VERSION 3.21)
-    project(ModSDK LANGUAGES CXX)
+    project(DyingLightModEngine LANGUAGES CXX)
 endif()
 
 if(NOT WIN32)
@@ -19,14 +19,16 @@ endif()
 
 add_library(ModSDK SHARED
     "src/dl_mod_engine_api.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/../SDK/include/ModSDK.h"
+    "src/dl_mod_engine_logger.cpp"
+    "src/modsdk_runtime.h"
+    "include/ModSDK.h"
     "${DLMOD_ENGINE_DEF}"
 )
 
 target_compile_features(ModSDK PRIVATE cxx_std_20)
 target_compile_definitions(ModSDK PRIVATE MODSDK_BUILD WIN32_LEAN_AND_MEAN NOMINMAX)
-target_include_directories(ModSDK PUBLIC "${CMAKE_CURRENT_LIST_DIR}/../SDK/include")
+target_include_directories(ModSDK PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
 target_compile_options(ModSDK PRIVATE /W4 /permissive- /EHsc)
 set_target_properties(ModSDK PROPERTIES OUTPUT_NAME "ModSDK")
 
-dlmod_set_sdk_output_directories(ModSDK)
+dlmod_set_sdk_output_directories(ModSDK "${CMAKE_CURRENT_LIST_DIR}")
