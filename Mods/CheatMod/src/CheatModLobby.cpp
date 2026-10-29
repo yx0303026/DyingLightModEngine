@@ -73,9 +73,6 @@ namespace cheat_mod
 			currentCount_ = snapshot.currentCount;
 			historyCount_ = snapshot.historyCount;
 			roomCount_ = snapshot.roomCount;
-			currentText_ = FormatMembers(currentMembers_.data(), currentCount_);
-			historyText_ = FormatMembers(historyMembers_.data(), historyCount_);
-			roomsText_ = FormatRooms(rooms_.data(), roomCount_);
 			RecordNewMembers(snapshot);
 			char status[256]{};
 			const char* lobbyId = SafeText(snapshot.lobbyId, "未加入房间");
@@ -100,7 +97,6 @@ namespace cheat_mod
 		if (api_ != nullptr && api_->clearHistory != nullptr && api_->controlObject != nullptr)
 			api_->clearHistory(api_->controlObject);
 		historyCount_ = 0;
-		historyText_ = "（暂无历史成员）";
 	}
 
 	void CheatModLobby::CopyCurrentToClipboard() const noexcept
@@ -138,56 +134,12 @@ namespace cheat_mod
 	}
 
 	const std::string& CheatModLobby::GetStatusText() const noexcept { return statusText_; }
-	const std::string& CheatModLobby::GetCurrentText() const noexcept { return currentText_; }
-	const std::string& CheatModLobby::GetHistoryText() const noexcept { return historyText_; }
-	const std::string& CheatModLobby::GetRoomsText() const noexcept { return roomsText_; }
+	const std::vector<DlModLobbyMemberV1>& CheatModLobby::GetCurrentMembers() const noexcept { return currentMembers_; }
+	const std::vector<DlModLobbyMemberV1>& CheatModLobby::GetHistoryMembers() const noexcept { return historyMembers_; }
+	const std::vector<DlModLobbyRoomV1>& CheatModLobby::GetRooms() const noexcept { return rooms_; }
 	std::uint32_t CheatModLobby::GetCurrentCount() const noexcept { return currentCount_; }
 	std::uint32_t CheatModLobby::GetHistoryCount() const noexcept { return historyCount_; }
 	std::uint32_t CheatModLobby::GetRoomCount() const noexcept { return roomCount_; }
-
-	std::string CheatModLobby::FormatMember(const DlModLobbyMemberV1& member)
-	{
-		char line[384]{};
-		_snprintf_s(line, sizeof(line), _TRUNCATE,
-			"%s | PUID：%s | 阵营：%s | SteamID：%s | 命中：%u",
-			SafeText(member.name, "未知"), SafeText(member.puid, "未知"),
-			GetTeamText(member), SafeText(member.steamId, "未上报"), member.hits);
-		return line;
-	}
-
-	std::string CheatModLobby::FormatMembers(const DlModLobbyMemberV1* members, std::uint32_t count)
-	{
-		if (members == nullptr || count == 0)
-			return "（暂无成员数据）";
-		std::string result;
-		for (std::uint32_t index = 0; index < count; ++index)
-		{
-			if (!result.empty())
-				result.push_back('\n');
-			result += FormatMember(members[index]);
-		}
-		return result;
-	}
-
-	std::string CheatModLobby::FormatRooms(const DlModLobbyRoomV1* rooms, std::uint32_t count)
-	{
-		if (rooms == nullptr || count == 0)
-			return "（暂无房间搜索结果）";
-		std::string result;
-		for (std::uint32_t index = 0; index < count; ++index)
-		{
-			char line[256]{};
-			_snprintf_s(line, sizeof(line), _TRUNCATE,
-				"%s | 房号：%s | 房主 SteamID：%s",
-				SafeText(rooms[index].ownerName, "未知"),
-				SafeText(rooms[index].lobbyId, "未知"),
-				SafeText(rooms[index].ownerSteamId, "未上报"));
-			if (!result.empty())
-				result.push_back('\n');
-			result += line;
-		}
-		return result;
-	}
 
 	const char* CheatModLobby::GetTeamText(const DlModLobbyMemberV1& member) noexcept
 	{
@@ -204,9 +156,6 @@ namespace cheat_mod
 		historyCount_ = 0;
 		roomCount_ = 0;
 		statusText_ = "大厅数据不可用";
-		currentText_ = "（暂无成员数据）";
-		historyText_ = "（暂无历史成员）";
-		roomsText_ = "（暂无房间搜索结果）";
 	}
 
 	void CheatModLobby::OpenSessionFile() noexcept

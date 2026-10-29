@@ -10,7 +10,7 @@
 
 namespace cheat_mod
 {
-	// 负责读取 Engine Lobby ABI，并把固定缓冲区转换为页面可显示文本。
+	// 负责读取 Engine Lobby ABI，并维护大厅快照与成员到场记录。
 	class CheatModLobby final
 	{
 	public:
@@ -25,18 +25,15 @@ namespace cheat_mod
 		void CopyCurrentToClipboard() const noexcept;
 
 		const std::string& GetStatusText() const noexcept;
-		const std::string& GetCurrentText() const noexcept;
-		const std::string& GetHistoryText() const noexcept;
-		const std::string& GetRoomsText() const noexcept;
+		const std::vector<DlModLobbyMemberV1>& GetCurrentMembers() const noexcept;
+		const std::vector<DlModLobbyMemberV1>& GetHistoryMembers() const noexcept;
+		const std::vector<DlModLobbyRoomV1>& GetRooms() const noexcept;
 		std::uint32_t GetCurrentCount() const noexcept;
 		std::uint32_t GetHistoryCount() const noexcept;
 		std::uint32_t GetRoomCount() const noexcept;
+		static const char* GetTeamText(const DlModLobbyMemberV1& member) noexcept;
 
 	private:
-		static std::string FormatMember(const DlModLobbyMemberV1& member);
-		static std::string FormatMembers(const DlModLobbyMemberV1* members, std::uint32_t count);
-		static std::string FormatRooms(const DlModLobbyRoomV1* rooms, std::uint32_t count);
-		static const char* GetTeamText(const DlModLobbyMemberV1& member) noexcept;
 		static bool CompareRecordFiles(
 			const std::pair<FILETIME, std::string>& left,
 			const std::pair<FILETIME, std::string>& right) noexcept;
@@ -52,9 +49,6 @@ namespace cheat_mod
 		std::vector<DlModLobbyMemberV1> historyMembers_;
 		std::vector<DlModLobbyRoomV1> rooms_;
 		std::string statusText_ = "大厅数据不可用";
-		std::string currentText_ = "（暂无成员数据）";
-		std::string historyText_ = "（暂无历史成员）";
-		std::string roomsText_ = "（暂无房间搜索结果）";
 		std::uint32_t currentCount_ = 0;
 		std::uint32_t historyCount_ = 0;
 		std::uint32_t roomCount_ = 0;

@@ -7,8 +7,40 @@ owns device/window discovery and initialization of the matching ImGui platform
 and renderer backends.
 
 Available building blocks include `Grid`, `StackPanel`, `Panel`, `ScrollView`,
-`ListView`, `Page`, `Button`, `Label`, `CheckBox`, `ComboBox`, `TextBox`,
-`Slider`, `ProgressBar`, `Separator`, `NavigationView`, and `TabView`.
+`ListView`, `DataTable`, `Page`, `Dialog`, `MessageDialog`, `CustomDialog`,
+`Button`, `Label`, `CheckBox`, `ComboBox`, `TextBox`, `Slider`, `ProgressBar`,
+`Separator`, `NavigationView`, and `TabView`.
+
+Dialogs are regular UI elements and can be attached to any `Component` or
+`Page`. Call `Show()` after adding the dialog to the element tree; it opens a
+modal popup on the next render. `SetOnClosed` and `SetOnAccepted` receive the
+corresponding button or external-close event:
+
+```cpp
+class DialogHost final
+{
+public:
+    void Build(dl::imgui::Page& page)
+    {
+        auto& message = page.AddChild<dl::imgui::MessageDialog>(
+            "Notice",
+            "Lobby service",
+            "The lobby snapshot is ready.");
+        message.SetAcceptButtonText("Got it");
+        message.SetOnAccepted(std::bind(&DialogHost::OnMessageAccepted, this));
+        message.Show();
+    }
+
+private:
+    void OnMessageAccepted()
+    {
+    }
+};
+```
+
+For a custom layout, use `CustomDialog::GetPage()` and compose existing
+controls directly in that page. The title, subtitle, footer buttons, sizing,
+and result callbacks remain shared with `Dialog`.
 
 Include `dl_imgui/imgui.h` and link the CMake target
 `DyingLightModEngine::ImGui`. This static target lets each mod compile the UI
@@ -105,6 +137,10 @@ and collapsed elements.
 `Style` can override common ImGui colors, frame rounding, and item spacing on
 any element. Styles inherit through ImGui's style stack and can be overridden
 by child elements.
+
+`DataTable` renders structured rows with stable column identifiers, fixed or
+stretch sizing, a frozen header, striped rows, horizontal and vertical
+scrolling, an empty state, and optional row selection.
 
 ```cpp
 class SettingsPanel final : public dl::imgui::Component {

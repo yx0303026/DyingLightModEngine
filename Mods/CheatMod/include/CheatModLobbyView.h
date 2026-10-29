@@ -25,10 +25,10 @@ namespace cheat_mod
 		CheatModLobby& lobby_;
 		dl::imgui::Label* roomStatusLabel_ = nullptr;
 		dl::imgui::Label* roomCountLabel_ = nullptr;
-		dl::imgui::ListView* roomResultsList_ = nullptr;
+		dl::imgui::DataTable* roomResultsTable_ = nullptr;
 		dl::imgui::Label* currentCountLabel_ = nullptr;
-		dl::imgui::ListView* currentMembersList_ = nullptr;
+		dl::imgui::DataTable* currentMembersTable_ = nullptr;
 		dl::imgui::Label* historyCountLabel_ = nullptr;
-		dl::imgui::ListView* historyMembersList_ = nullptr;
+		dl::imgui::DataTable* historyMembersTable_ = nullptr;
 	};
 }

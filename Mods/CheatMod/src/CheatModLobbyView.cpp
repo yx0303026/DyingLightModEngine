@@ -1,5 +1,6 @@
 #include "CheatModLobbyView.h"
 
+#include <algorithm>
 #include <functional>
 #include <cstdint>
 #include <string>
@@ -39,27 +40,71 @@ namespace cheat_mod
 			element.SetStyle(style);
 		}
 
-		std::vector<std::string> SplitLines(const std::string& text)
+		const char* SafeCellText(const char* value, const char* fallback) noexcept
 		{
-			std::vector<std::string> lines;
-			std::size_t begin = 0;
-			while (begin <= text.size()) {
-				const std::size_t end = text.find('\n', begin);
-				const std::size_t length = end == std::string::npos ? text.size() - begin : end - begin;
-				if (length > 0U) {
-					lines.emplace_back(text, begin, length);
-				}
-				if (end == std::string::npos) {
-					break;
-				}
-				begin = end + 1U;
-			}
-			return lines;
+			return value != nullptr && value[0] != '\0' ? value : fallback;
 		}
 
-		std::vector<std::string> MakeListItems(const std::string& text, std::uint32_t count)
+		std::vector<dl::imgui::DataTable::Row> MakeMemberRows(
+			const std::vector<DlModLobbyMemberV1>& members,
+			std::uint32_t count)
 		{
-			return count == 0U ? std::vector<std::string>{} : SplitLines(text);
+			std::vector<dl::imgui::DataTable::Row> rows;
+			const std::size_t rowCount = (std::min)(
+				static_cast<std::size_t>(count), members.size());
+			rows.reserve(rowCount);
+			for (std::size_t index = 0; index < rowCount; ++index) {
+				const DlModLobbyMemberV1& member = members[index];
+				rows.push_back({
+					SafeCellText(member.name, "未知"),
+					SafeCellText(member.puid, "未报告"),
+					CheatModLobby::GetTeamText(member),
+					SafeCellText(member.steamId, "未报告"),
+					std::to_string(member.hits)
+				});
+			}
+			return rows;
+		}
+
+		std::vector<dl::imgui::DataTable::Row> MakeRoomRows(
+			const std::vector<DlModLobbyRoomV1>& rooms,
+			std::uint32_t count)
+		{
+			std::vector<dl::imgui::DataTable::Row> rows;
+			const std::size_t rowCount = (std::min)(
+				static_cast<std::size_t>(count), rooms.size());
+			rows.reserve(rowCount);
+			for (std::size_t index = 0; index < rowCount; ++index) {
+				const DlModLobbyRoomV1& room = rooms[index];
+				rows.push_back({
+					SafeCellText(room.ownerName, "未知"),
+					SafeCellText(room.lobbyId, "未报告"),
+					SafeCellText(room.ownerSteamId, "未报告")
+				});
+			}
+			return rows;
+		}
+
+		void ConfigureMemberTable(dl::imgui::DataTable& table)
+		{
+			table.SetColumns({
+				{ "name", "名称", 150.0F },
+				{ "puid", "PUID", 245.0F },
+				{ "team", "阵营", 90.0F },
+				{ "steam_id", "SteamID", 175.0F },
+				{ "hits", "命中", 65.0F }
+			});
+			table.SetEmptyText("暂无成员");
+		}
+
+		void ConfigureRoomTable(dl::imgui::DataTable& table)
+		{
+			table.SetColumns({
+				{ "owner", "房主", 155.0F },
+				{ "lobby_id", "房号", 280.0F },
+				{ "steam_id", "房主 SteamID", 185.0F }
+			});
+			table.SetEmptyText("暂无搜索结果");
 		}
 	}
 
@@ -86,8 +131,9 @@ namespace cheat_mod
 
 		dl::imgui::Label& resultTitle = page.AddChild<dl::imgui::Label>("搜索结果");
 		ApplyStyle(resultTitle, MakeTitleStyle());
-		roomResultsList_ = &page.AddChild<dl::imgui::ListView>(ImVec2(0.0F, 0.0F), "暂无搜索结果");
-		roomResultsList_->SetItems(MakeListItems(lobby_.GetRoomsText(), lobby_.GetRoomCount()));
+		roomResultsTable_ = &page.AddChild<dl::imgui::DataTable>(ImVec2(0.0F, 0.0F), "暂无搜索结果");
+		ConfigureRoomTable(*roomResultsTable_);
+		roomResultsTable_->SetRows(MakeRoomRows(lobby_.GetRooms(), lobby_.GetRoomCount()));
 	}
 
 	void CheatModLobbyView::BuildMembersPage(dl::imgui::Page& page)
@@ -108,13 +154,15 @@ namespace cheat_mod
 
 		dl::imgui::Label& currentTitle = page.AddChild<dl::imgui::Label>("当前成员");
 		ApplyStyle(currentTitle, MakeTitleStyle());
-		currentMembersList_ = &page.AddChild<dl::imgui::ListView>(ImVec2(0.0F, 190.0F), "暂无当前成员");
-		currentMembersList_->SetItems(MakeListItems(lobby_.GetCurrentText(), lobby_.GetCurrentCount()));
+		currentMembersTable_ = &page.AddChild<dl::imgui::DataTable>(ImVec2(0.0F, 190.0F), "暂无当前成员");
+		ConfigureMemberTable(*currentMembersTable_);
+		currentMembersTable_->SetRows(MakeMemberRows(lobby_.GetCurrentMembers(), lobby_.GetCurrentCount()));
 
 		dl::imgui::Label& historyTitle = page.AddChild<dl::imgui::Label>("历史成员");
 		ApplyStyle(historyTitle, MakeTitleStyle());
-		historyMembersList_ = &page.AddChild<dl::imgui::ListView>(ImVec2(0.0F, 105.0F), "暂无历史成员");
-		historyMembersList_->SetItems(MakeListItems(lobby_.GetHistoryText(), lobby_.GetHistoryCount()));
+		historyMembersTable_ = &page.AddChild<dl::imgui::DataTable>(ImVec2(0.0F, 105.0F), "暂无历史成员");
+		ConfigureMemberTable(*historyMembersTable_);
+		historyMembersTable_->SetRows(MakeMemberRows(lobby_.GetHistoryMembers(), lobby_.GetHistoryCount()));
 
 		dl::imgui::StackPanel& actions = page.AddChild<dl::imgui::StackPanel>(dl::imgui::Orientation::Horizontal);
 		dl::imgui::Button& clearHistory = actions.AddChild<dl::imgui::Button>("清空历史");
@@ -129,16 +177,16 @@ namespace cheat_mod
 			roomStatusLabel_->SetText(lobby_.GetStatusText());
 		if (roomCountLabel_ != nullptr)
 			roomCountLabel_->SetText(std::string("房间\n") + std::to_string(lobby_.GetRoomCount()));
-		if (roomResultsList_ != nullptr)
-			roomResultsList_->SetItems(MakeListItems(lobby_.GetRoomsText(), lobby_.GetRoomCount()));
+		if (roomResultsTable_ != nullptr)
+			roomResultsTable_->SetRows(MakeRoomRows(lobby_.GetRooms(), lobby_.GetRoomCount()));
 		if (currentCountLabel_ != nullptr)
 			currentCountLabel_->SetText(std::string("当前成员\n") + std::to_string(lobby_.GetCurrentCount()));
-		if (currentMembersList_ != nullptr)
-			currentMembersList_->SetItems(MakeListItems(lobby_.GetCurrentText(), lobby_.GetCurrentCount()));
+		if (currentMembersTable_ != nullptr)
+			currentMembersTable_->SetRows(MakeMemberRows(lobby_.GetCurrentMembers(), lobby_.GetCurrentCount()));
 		if (historyCountLabel_ != nullptr)
 			historyCountLabel_->SetText(std::string("历史成员\n") + std::to_string(lobby_.GetHistoryCount()));
-		if (historyMembersList_ != nullptr)
-			historyMembersList_->SetItems(MakeListItems(lobby_.GetHistoryText(), lobby_.GetHistoryCount()));
+		if (historyMembersTable_ != nullptr)
+			historyMembersTable_->SetRows(MakeMemberRows(lobby_.GetHistoryMembers(), lobby_.GetHistoryCount()));
 	}
 
 	void CheatModLobbyView::OnClearHistory() noexcept
