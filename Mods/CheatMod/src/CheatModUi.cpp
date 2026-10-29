@@ -22,8 +22,7 @@ namespace cheat_mod {
 		}
 
 		ImGui::SetCurrentContext(context_.GetNativeContext());
-		/* Engine-fed mouse events are injected after the Win32 backend samples the
-		 * frozen system cursor, so later events must win inside a single frame. */
+		/* 引擎鼠标事件在 Win32 后端读取冻结系统光标后注入，因此同一帧内以后注入的事件优先。 */
 		ImGui::GetIO().ConfigInputTrickleEventQueue = false;
 
 		navigation_ = std::make_unique<dl::imgui::NavigationView>(180.0F);
@@ -49,6 +48,8 @@ namespace cheat_mod {
 		if (!InitializeGraphics(graphicsContext)) {
 			return;
 		}
+		lobby_.Refresh();
+		RefreshLobbyLabels();
 		bool open = open_.load();
 		ImGui_ImplDX11_NewFrame();
 		ImGui_ImplWin32_NewFrame();
@@ -87,6 +88,11 @@ namespace cheat_mod {
 		context_.SetMouseStateProvider(provider);
 	}
 
+	void CheatModUi::SetLobbyApi(const DlModLobbyApiV1* api) noexcept
+	{
+		lobby_.SetApi(api);
+	}
+
 	void CheatModUi::HandleWindowMessage(
 		std::uintptr_t window,
 		std::uint32_t message,
@@ -97,7 +103,7 @@ namespace cheat_mod {
 			return;
 		}
 		if (open_.load() && engineMouse_.load() && IsMouseMessage(message)) {
-			/* The DirectInput bridge owns the pointer while the game cursor is frozen. */
+			/* 游戏光标冻结期间由 DirectInput 桥接层接管指针输入。 */
 			return;
 		}
 		ImGui::SetCurrentContext(context_.GetNativeContext());
@@ -137,9 +143,15 @@ namespace cheat_mod {
 	{
 		dl::imgui::Page& dashboard = navigation_->AddPage("dashboard", "Dashboard");
 		dl::imgui::Page& player = navigation_->AddPage("player", "Player");
+		dl::imgui::Page& roomList = navigation_->AddPage("room-list", "Room List");
 		dl::imgui::Page& settings = navigation_->AddPage("settings", "Settings");
+		navigation_->GetNavigationBar().SetItemIcon("dashboard", dl::imgui::NavigationIcon::Home);
+		navigation_->GetNavigationBar().SetItemIcon("player", dl::imgui::NavigationIcon::Person);
+		navigation_->GetNavigationBar().SetItemIcon("room-list", dl::imgui::NavigationIcon::Game);
+		navigation_->GetNavigationBar().SetItemIcon("settings", dl::imgui::NavigationIcon::Settings);
 		BuildDashboardPage(dashboard);
 		BuildPlayerPage(player);
+		BuildRoomListPage(roomList);
 		BuildSettingsPage(settings);
 	}
 
@@ -161,6 +173,23 @@ namespace cheat_mod {
 		page.AddChild<dl::imgui::Label>("Player controls are kept in this page so new features can be added independently.");
 	}
 
+	void CheatModUi::BuildRoomListPage(dl::imgui::Page& page)
+	{
+		page.AddChild<dl::imgui::Label>("Room members and search results");
+		lobbyStatusLabel_ = &page.AddChild<dl::imgui::Label>(lobby_.GetStatusText());
+		page.AddChild<dl::imgui::Separator>();
+		dl::imgui::ScrollView& currentScroll = page.AddChild<dl::imgui::ScrollView>(ImVec2(0.0F, 220.0F), true);
+		lobbyCurrentLabel_ = &currentScroll.AddChild<dl::imgui::Label>("Current members: ");
+		dl::imgui::ScrollView& historyScroll = page.AddChild<dl::imgui::ScrollView>(ImVec2(0.0F, 180.0F), true);
+		lobbyHistoryLabel_ = &historyScroll.AddChild<dl::imgui::Label>("History members: ");
+		dl::imgui::ScrollView& roomsScroll = page.AddChild<dl::imgui::ScrollView>(ImVec2(0.0F, 180.0F), true);
+		lobbyRoomsLabel_ = &roomsScroll.AddChild<dl::imgui::Label>("Search results: ");
+		dl::imgui::Button& clearHistory = page.AddChild<dl::imgui::Button>("Clear history");
+		clearHistory.SetOnClick(std::bind(&CheatModUi::OnClearLobbyHistory, this));
+		dl::imgui::Button& copyMembers = page.AddChild<dl::imgui::Button>("Copy current members");
+		copyMembers.SetOnClick(std::bind(&CheatModUi::OnCopyLobbyMembers, this));
+	}
+
 	void CheatModUi::BuildSettingsPage(dl::imgui::Page& page)
 	{
 		page.AddChild<dl::imgui::Label>("Settings");
@@ -179,10 +208,32 @@ namespace cheat_mod {
 		infiniteStaminaEnabled_ = enabled;
 	}
 
+	void CheatModUi::OnClearLobbyHistory() noexcept
+	{
+		lobby_.ClearHistory();
+	}
+
+	void CheatModUi::OnCopyLobbyMembers() noexcept
+	{
+		lobby_.CopyCurrentToClipboard();
+	}
+
 	void CheatModUi::OnUiScaleChanged(float scale) noexcept
 	{
 		uiScale_ = scale;
 		context_.SetScale(scale);
+	}
+
+	void CheatModUi::RefreshLobbyLabels() noexcept
+	{
+		if (lobbyStatusLabel_ != nullptr)
+			lobbyStatusLabel_->SetText(lobby_.GetStatusText());
+		if (lobbyCurrentLabel_ != nullptr)
+			lobbyCurrentLabel_->SetText(std::string("Current members: ") + lobby_.GetCurrentText());
+		if (lobbyHistoryLabel_ != nullptr)
+			lobbyHistoryLabel_->SetText(std::string("History members: ") + lobby_.GetHistoryText());
+		if (lobbyRoomsLabel_ != nullptr)
+			lobbyRoomsLabel_->SetText(std::string("Search results: ") + lobby_.GetRoomsText());
 	}
 
 	bool CheatModUi::InitializeGraphics(void* graphicsContext) noexcept
@@ -270,4 +321,4 @@ namespace cheat_mod {
 		return SUCCEEDED(targetResult) && renderTarget_ != nullptr;
 	}
 
-} // namespace cheat_mod
+} // cheat_mod 命名空间

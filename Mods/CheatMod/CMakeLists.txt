@@ -20,12 +20,18 @@ endif()
 add_library(CheatMod SHARED
     "src/CheatMod.cpp"
     "src/CheatModInput.cpp"
+    "src/CheatModLobby.cpp"
     "src/CheatModRuntime.cpp"
     "src/CheatModUi.cpp"
     "include/CheatModInput.h"
+    "include/CheatModLobby.h"
     "include/CheatModRuntime.h"
     "include/CheatModUi.h"
-    "../../DyingLightModEngine/include/sdk/EngineAbi.h"
+    "../../DyingLightModEngine/include/sdk/EngineAbiTypes.h"
+    "../../DyingLightModEngine/include/sdk/EngineHostAbi.h"
+    "../../DyingLightModEngine/include/sdk/EngineLobbyAbi.h"
+    "../../DyingLightModEngine/include/sdk/EngineModLifecycleAbi.h"
+    "../../DyingLightModEngine/include/sdk/EngineUiInputAbi.h"
     "../../DyingLightModEngine/include/logging/EngineLogger.h"
     "${CHEAT_MOD_DEF}"
 )
@@ -36,7 +42,7 @@ target_include_directories(CheatMod PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/include"
     "${CMAKE_CURRENT_LIST_DIR}/../../DyingLightModEngine/include"
 )
-target_compile_options(CheatMod PRIVATE /W4 /permissive- /EHsc)
+target_compile_options(CheatMod PRIVATE /W4 /permissive- /EHsc /utf-8)
 target_link_libraries(CheatMod PRIVATE DyingLightModEngine::ImGui)
 set_target_properties(CheatMod PROPERTIES OUTPUT_NAME "cheat_mod")
 

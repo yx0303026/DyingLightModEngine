@@ -1,9 +1,10 @@
 #include "core/EngineHost.h"
 
-#include "sdk/EngineAbi.h"
+#include "sdk/EngineApiAbi.h"
 #include "runtime/EngineDirectInputRuntime.h"
 #include "runtime/EngineCollisionRuntime.h"
 #include "runtime/EngineEntityRuntime.h"
+#include "runtime/EngineLobbyRuntime.h"
 #include "runtime/EngineGraphicsRuntime.h"
 #include "runtime/EngineHookRuntime.h"
 #include "logging/EngineLogger.h"
@@ -43,11 +44,15 @@ bool InitializeModEngine(HMODULE engineModule) noexcept
 		&EngineDirectInputRuntime::GetUiMouseState,
 		EngineCollisionRuntime::GetApi(),
 		EngineEntityRuntime::GetApi(),
-		EngineHookRuntime::GetApi()
+		EngineHookRuntime::GetApi(),
+		EngineLobbyRuntime::GetApi()
 	};
 	if (engineApi.initialize(&hostApi) != DLMOD_RESULT_SUCCESS) {
 		OutputDebugStringA("[DyingLightModEngine] Engine initialization failed\n");
 		return false;
+	}
+	if (!EngineLobbyRuntime::Initialize()) {
+		EngineLogger::Warning("Lobby collector initialization failed; the Lobby API remains unavailable.");
 	}
 
 	if (!EngineDirectInputRuntime::Install()) {
@@ -83,6 +88,7 @@ bool ShutdownModEngine() noexcept
 
 	g_graphicsRuntime.Shutdown();
 	EngineDirectInputRuntime::Uninstall();
+	EngineLobbyRuntime::Shutdown();
 	const DlModResult unloadResult = EngineModManager::UnloadAll();
 	if (unloadResult != DLMOD_RESULT_SUCCESS) {
 		EngineLogger::Error("Could not unload all mods; engine shutdown was cancelled.");

@@ -9,6 +9,15 @@
 
 namespace dl::imgui {
 
+	enum class NavigationIcon {
+		None,
+		Home,
+		Person,
+		Settings,
+		Game,
+		Tools
+	};
+
 	class Page : public Panel {
 	public:
 		explicit Page(std::string title = {});
@@ -28,14 +37,17 @@ namespace dl::imgui {
 		struct Item {
 			std::string id;
 			std::string label;
+			NavigationIcon icon = NavigationIcon::None;
 		};
 
 		using SelectionChanged = std::function<void(const std::string&)>;
 
 		void AddItem(std::string id, std::string label);
+		void AddItem(std::string id, std::string label, NavigationIcon icon);
 		const std::vector<Item>& GetItems() const noexcept;
 		const std::string& GetSelectedId() const noexcept;
 		void SetSelectedId(std::string id);
+		void SetItemIcon(const std::string& id, NavigationIcon icon) noexcept;
 		void SetOnSelectionChanged(SelectionChanged callback);
 
 	protected:
@@ -103,4 +115,4 @@ namespace dl::imgui {
 		int selectedIndex_ = 0;
 	};
 
-} // namespace dl::imgui
+} // dl::imgui 命名空间

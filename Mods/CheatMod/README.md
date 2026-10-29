@@ -2,7 +2,12 @@
 
 `CheatMod` is a loadable Dying Light Mod Engine module that builds its menu
 with `DyingLightModEngine::ImGui`. The menu has a vertical navigation sidebar
-and a page content area containing Dashboard, Player, and Settings pages.
+and a page content area containing Dashboard, Player, Room List, and Settings pages.
+
+The Room List page consumes the Engine Lobby snapshot API. Lobby discovery and
+EOS data collection stay inside the Engine runtime; the mod only receives a
+stable, copied snapshot through `DlModLobbyApiV1` and renders it with the Engine
+ImGui facade.
 
 Pressing F2 toggles the menu. The module polls F2 and exposes
 `CheatMod_HandleKeyEvent` for hosts that provide their own input hook. The

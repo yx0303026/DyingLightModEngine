@@ -1,5 +1,7 @@
 #include "managers/EngineModManager.h"
 
+#include "sdk/EngineApiAbi.h"
+
 #include <Windows.h>
 
 #include <algorithm>

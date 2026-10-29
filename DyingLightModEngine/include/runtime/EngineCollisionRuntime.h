@@ -1,6 +1,6 @@
 #pragma once
 
-#include "sdk/EngineAbi.h"
+#include "sdk/EngineCollisionAbi.h"
 
 class EngineCollisionRuntime final {
 public:

@@ -26,6 +26,9 @@ namespace cheat_mod {
 		if (hostApi->structSize >= DLMOD_HOST_API_V1_MOUSE_STATE_SIZE) {
 			ui_.SetMouseStateProvider(hostApi->getUiMouseState);
 		}
+		if (hostApi->structSize >= DLMOD_HOST_API_V1_LOBBY_SIZE) {
+			ui_.SetLobbyApi(hostApi->lobby);
+		}
 		initialized_ = true;
 		if (!input_.Start()) {
 			ui_.Shutdown();

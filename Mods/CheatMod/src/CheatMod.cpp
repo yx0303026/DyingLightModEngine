@@ -1,5 +1,7 @@
 #include "CheatModRuntime.h"
 
+#include "sdk/EngineModLifecycleAbi.h"
+
 namespace {
 
 	cheat_mod::CheatModRuntime g_runtime;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "sdk/EngineAbi.h"
+#include "sdk/EngineAbiTypes.h"
 
 #ifdef __cplusplus
 

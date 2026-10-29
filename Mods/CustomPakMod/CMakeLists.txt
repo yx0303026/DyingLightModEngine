@@ -22,7 +22,9 @@ add_library(CustomPakMod SHARED
     "src/PakLoader.cpp"
     "include/PakLoader.h"
     "include/PakLoaderAbi.h"
-    "../../DyingLightModEngine/include/sdk/EngineAbi.h"
+    "../../DyingLightModEngine/include/sdk/EngineAbiTypes.h"
+    "../../DyingLightModEngine/include/sdk/EngineHostAbi.h"
+    "../../DyingLightModEngine/include/sdk/EngineModLifecycleAbi.h"
     "${CUSTOM_PAK_MOD_DEF}"
 )
 
@@ -32,7 +34,7 @@ target_include_directories(CustomPakMod PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/include"
     "${CMAKE_CURRENT_LIST_DIR}/../../DyingLightModEngine/include"
 )
-target_compile_options(CustomPakMod PRIVATE /W4 /permissive- /EHsc)
+target_compile_options(CustomPakMod PRIVATE /W4 /permissive- /EHsc /utf-8)
 set_target_properties(CustomPakMod PROPERTIES OUTPUT_NAME "custom_pak_mod")
 
 dlmod_set_output_directories(CustomPakMod CustomPakMod)

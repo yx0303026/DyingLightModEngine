@@ -1,6 +1,6 @@
 #pragma once
 
-#include "sdk/EngineAbi.h"
+#include "sdk/EngineHostAbi.h"
 
 #include <Windows.h>
 

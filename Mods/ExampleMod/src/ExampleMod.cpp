@@ -1,4 +1,5 @@
-#include "sdk/EngineAbi.h"
+#include "sdk/EngineModLifecycleAbi.h"
+#include "sdk/EngineHostAbi.h"
 #include "logging/EngineLogger.h"
 
 namespace {

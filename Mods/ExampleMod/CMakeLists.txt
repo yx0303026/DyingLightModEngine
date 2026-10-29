@@ -19,7 +19,9 @@ endif()
 
 add_library(ExampleMod SHARED
     "src/ExampleMod.cpp"
-    "../../DyingLightModEngine/include/sdk/EngineAbi.h"
+    "../../DyingLightModEngine/include/sdk/EngineAbiTypes.h"
+    "../../DyingLightModEngine/include/sdk/EngineHostAbi.h"
+    "../../DyingLightModEngine/include/sdk/EngineModLifecycleAbi.h"
     "../../DyingLightModEngine/include/logging/EngineLogger.h"
     "${EXAMPLE_MOD_DEF}"
 )
@@ -29,7 +31,7 @@ target_compile_definitions(ExampleMod PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_include_directories(ExampleMod PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/../../DyingLightModEngine/include"
 )
-target_compile_options(ExampleMod PRIVATE /W4 /permissive- /EHsc)
+target_compile_options(ExampleMod PRIVATE /W4 /permissive- /EHsc /utf-8)
 set_target_properties(ExampleMod PROPERTIES OUTPUT_NAME "example_mod")
 
 dlmod_set_output_directories(ExampleMod ExampleMod)
