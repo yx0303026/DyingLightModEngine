@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#pragma region Platform ABI
 #if defined(_WIN32)
 #define MODSDK_CALL __cdecl
 #if defined(MODSDK_BUILD)
@@ -16,12 +17,14 @@
 #define MODSDK_API
 #define MODSDK_MOD_EXPORT
 #endif
+#pragma endregion
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
+#pragma region Core ABI Types
 #define MODSDK_ABI_VERSION 1u
 
 	typedef enum DlModResult
@@ -37,7 +40,9 @@ extern "C"
 	} DlModResult;
 
 	typedef void(MODSDK_CALL *EngineLogCallback)(void *context, uint32_t level, const char *message);
+#pragma endregion
 
+#pragma region Collision API
 	typedef struct DlModVector3V1
 	{
 		float x;
@@ -94,17 +99,28 @@ extern "C"
 	typedef DlModResult(MODSDK_CALL *ModEngineCaptureHitboxesFn)(
 		void *controlObject,
 		DlModHitboxSnapshotV1 *snapshot);
+	typedef DlModResult(MODSDK_CALL *ModEngineGetHitboxByNameFn)(
+		void *controlObject,
+		const char *name,
+		DlModHitboxV1 *hitbox,
+		uint32_t hitboxSize);
 
 	typedef struct DlModCollisionApiV1
 	{
 		uint32_t structSize;
 		uint32_t abiVersion;
 		ModEngineCaptureHitboxesFn captureHitboxes;
+		ModEngineGetHitboxByNameFn getHitboxByName;
 	} DlModCollisionApiV1;
 
 #define DLMOD_COLLISION_API_V1_MIN_SIZE \
 	((uint32_t)(offsetof(DlModCollisionApiV1, captureHitboxes) + sizeof(ModEngineCaptureHitboxesFn)))
+#define DLMOD_COLLISION_API_V1_HITBOX_NAME_SIZE \
+	((uint32_t)(offsetof(DlModCollisionApiV1, getHitboxByName) + sizeof(ModEngineGetHitboxByNameFn)))
 
+#pragma endregion
+
+#pragma region Host and UI Input API
 #define DLMOD_UI_MOUSE_POSITION_VALID 0x1u
 #define DLMOD_UI_MOUSE_DEVICE_CAPTURED 0x2u
 
@@ -152,7 +168,9 @@ extern "C"
 	((uint32_t)(offsetof(DlModHostApiV1, getUiMouseState) + sizeof(ModEngineGetUiMouseStateFn)))
 #define DLMOD_HOST_API_V1_COLLISION_SIZE \
 	((uint32_t)(offsetof(DlModHostApiV1, collision) + sizeof(const DlModCollisionApiV1 *)))
+#pragma endregion
 
+#pragma region Mod Lifecycle API
 	typedef DlModResult(MODSDK_CALL *DlModOnLoadFn)(
 		void *modContext,
 		const DlModHostApiV1 *hostApi);
@@ -193,13 +211,15 @@ extern "C"
 #define DLMOD_DESCRIPTOR_V1_MIN_SIZE ((uint32_t)offsetof(DlModDescriptorV1, logName))
 
 	/*
-	 * Every loadable mod DLL must export a function named ModSDK_QueryMod.
-	 * The manager calls it after loading the DLL to obtain the mod descriptor.
+	 * 所有模组必须在 ModEngineRegisterMod 调用之前注册。
+	 * 如果在注册之后调用 ModEngineRegisterMod，将返回 DLMOD_RESULT_INVALID_STATE。
 	 */
 	typedef DlModResult(MODSDK_CALL *DlModQueryModFn)(
 		uint32_t requestedAbiVersion,
 		DlModDescriptorV1 *descriptor);
+#pragma endregion
 
+#pragma region Engine API
 	typedef DlModResult(MODSDK_CALL *ModEngineInitializeFn)(
 		const DlModHostApiV1 *hostApi);
 	typedef DlModResult(MODSDK_CALL *ModEngineRegisterModFn)(
@@ -236,6 +256,7 @@ extern "C"
 	MODSDK_API DlModResult MODSDK_CALL ModSDK_QueryApi(
 		uint32_t requestedAbiVersion,
 		ModEngineApiV1 *api);
+#pragma endregion
 
 #ifdef __cplusplus
 }

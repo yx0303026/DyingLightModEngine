@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 namespace {
 
@@ -29,6 +30,7 @@ namespace {
 	constexpr std::uint8_t kMixedTraceMode = 4;
 	constexpr std::uint16_t kMaximumElements = 1024;
 	constexpr std::size_t kMaximumElementNameLength = 128;
+	constexpr std::uint32_t kMaximumWireframeLines = 8192;
 
 	using ResolveThreadDataFunction = void* (__fastcall*)(void*);
 	using GetWorldMatrixFunction = const float* (__fastcall*)(void*);
@@ -134,6 +136,85 @@ namespace {
 		snapshot.count = 0;
 	}
 
+	void ClearExtendedSnapshot(DlModHitboxSnapshotV1& snapshot) noexcept
+	{
+		snapshot.usesBoxQueries = 0;
+		snapshot.wireframeRequiredCount = 0;
+		snapshot.wireframeCount = 0;
+		snapshot.shapeCount = 0;
+		snapshot.wireframeTruncated = 0;
+	}
+
+	DlModVector3V1 TransformPoint(
+		const float (&matrix)[12],
+		const DlModVector3V1& point) noexcept
+	{
+		return {
+			matrix[0] * point.x + matrix[1] * point.y +
+				matrix[2] * point.z + matrix[3],
+			matrix[4] * point.x + matrix[5] * point.y +
+				matrix[6] * point.z + matrix[7],
+			matrix[8] * point.x + matrix[9] * point.y +
+				matrix[10] * point.z + matrix[11]
+		};
+	}
+
+	bool AppendWireframe(
+		const DlModHitboxV1& hitbox,
+		DlModHitboxSnapshotV1& snapshot,
+		bool wireframeOutput) noexcept
+	{
+		DlModVector3V1 corners[8]{};
+		for (unsigned int index = 0; index < 8; ++index) {
+			corners[index] = TransformPoint(
+				hitbox.worldMatrix,
+				{
+					(index & 1U) != 0U
+						? hitbox.localMaximum.x : hitbox.localMinimum.x,
+					(index & 2U) != 0U
+						? hitbox.localMaximum.y : hitbox.localMinimum.y,
+					(index & 4U) != 0U
+						? hitbox.localMaximum.z : hitbox.localMinimum.z
+				});
+			if (!IsFinite(corners[index])) {
+				return false;
+			}
+		}
+
+		if (wireframeOutput) {
+			snapshot.wireframeRequiredCount += 12;
+			++snapshot.shapeCount;
+			for (unsigned int index = 0; index < 8; ++index) {
+				for (unsigned int bit = 1; bit <= 4; bit <<= 1) {
+					if ((index & bit) == 0U &&
+						snapshot.wireframeCount < kMaximumWireframeLines &&
+						snapshot.wireframeCount < snapshot.wireframeCapacity &&
+						snapshot.wireframeLines != nullptr) {
+						snapshot.wireframeLines[snapshot.wireframeCount] = {
+							corners[index],
+							corners[index | bit]
+						};
+						++snapshot.wireframeCount;
+					}
+				}
+			}
+			if (snapshot.wireframeCount < snapshot.wireframeRequiredCount) {
+				snapshot.wireframeTruncated = 1;
+			}
+		}
+		return true;
+	}
+
+	void StoreHitbox(
+		std::uint8_t* destination,
+		std::uint32_t elementSize,
+		const DlModHitboxV1& hitbox) noexcept
+	{
+		const std::size_t copySize =
+			elementSize < sizeof(hitbox) ? elementSize : sizeof(hitbox);
+		std::memcpy(destination, &hitbox, copySize);
+	}
+
 	bool ReadName(
 		void* controlObject,
 		int elementIndex,
@@ -162,6 +243,29 @@ namespace {
 			output[0] = '\0';
 			return false;
 		}
+	}
+
+	bool CopyRequestedName(
+		const char* source,
+		char (&destination)[kMaximumElementNameLength]) noexcept
+	{
+		if (source == nullptr) {
+			return false;
+		}
+		__try {
+			for (std::size_t index = 0; index < sizeof(destination); ++index) {
+				destination[index] = source[index];
+				if (destination[index] == '\0') {
+					return index != 0;
+				}
+			}
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER) {
+			destination[0] = '\0';
+			return false;
+		}
+		destination[0] = '\0';
+		return false;
 	}
 
 	bool ReadMatrix(
@@ -197,7 +301,8 @@ const DlModCollisionApiV1* EngineCollisionRuntime::GetApi() noexcept
 	static const DlModCollisionApiV1 api = {
 		sizeof(DlModCollisionApiV1),
 		MODSDK_ABI_VERSION,
-		&CaptureHitboxes
+		&CaptureHitboxes,
+		&GetHitboxByName
 	};
 #if !defined(_M_X64)
 	return nullptr;
@@ -206,26 +311,51 @@ const DlModCollisionApiV1* EngineCollisionRuntime::GetApi() noexcept
 #endif
 }
 
-DlModResult MODSDK_CALL EngineCollisionRuntime::CaptureHitboxes(
+static DlModResult MODSDK_CALL CaptureHitboxesImpl(
 	void* controlObject,
-	DlModHitboxSnapshotV1* snapshot) noexcept
+	DlModHitboxSnapshotV1* snapshot,
+	const char* requestedName) noexcept
 {
 	if (snapshot == nullptr ||
-		snapshot->structSize < sizeof(DlModHitboxSnapshotV1) ||
+		snapshot->structSize < DLMOD_HITBOX_SNAPSHOT_V1_BASE_SIZE ||
 		snapshot->abiVersion != MODSDK_ABI_VERSION ||
-		snapshot->elementSize != sizeof(DlModHitboxV1) ||
+		snapshot->elementSize < DLMOD_HITBOX_V1_BASE_SIZE ||
 		(snapshot->capacity != 0 && snapshot->elements == nullptr) ||
 		controlObject == nullptr) {
 		return DLMOD_RESULT_INVALID_ARGUMENT;
 	}
 
 	const std::uint32_t capacity = snapshot->capacity;
+	const std::uint32_t elementSize = snapshot->elementSize;
 	DlModHitboxV1* elements = snapshot->elements;
+	const bool extendedOutput =
+		snapshot->structSize >= sizeof(DlModHitboxSnapshotV1);
+	const std::uint32_t wireframeCapacity =
+		extendedOutput ? snapshot->wireframeCapacity : 0;
+	DlModCollisionLineV1* wireframeLines =
+		extendedOutput ? snapshot->wireframeLines : nullptr;
+	const bool wireframeOutput =
+		extendedOutput &&
+		(wireframeLines != nullptr || wireframeCapacity != 0);
+	if (extendedOutput && wireframeCapacity != 0 && wireframeLines == nullptr) {
+		return DLMOD_RESULT_INVALID_ARGUMENT;
+	}
 	ClearSnapshot(*snapshot);
+	if (extendedOutput) {
+		ClearExtendedSnapshot(*snapshot);
+	}
+	if (extendedOutput) {
+		snapshot->wireframeLines = wireframeLines;
+	}
 
 #if !defined(_M_X64)
 	(void)capacity;
+	(void)elementSize;
 	(void)elements;
+	(void)wireframeCapacity;
+	(void)wireframeLines;
+	(void)wireframeOutput;
+	(void)requestedName;
 	return DLMOD_RESULT_UNSUPPORTED_FEATURE;
 #else
 	const HMODULE engine = GetModuleHandleW(kEngineModuleName);
@@ -247,11 +377,15 @@ DlModResult MODSDK_CALL EngineCollisionRuntime::CaptureHitboxes(
 		snapshot->unsupportedCount = 1;
 		return DLMOD_RESULT_UNSUPPORTED_FEATURE;
 	}
+	if (extendedOutput) {
+		snapshot->usesBoxQueries = 1;
+	}
 
 	const CollisionBindings& bindings = ResolveBindings(engine);
 	if (bindings.resolveModelData == nullptr ||
 		bindings.resolveElementData == nullptr ||
-		bindings.getWorldMatrix == nullptr) {
+		bindings.getWorldMatrix == nullptr ||
+		(requestedName != nullptr && bindings.getElementName == nullptr)) {
 		return DLMOD_RESULT_INVALID_STATE;
 	}
 	void* modelData = nullptr;
@@ -310,22 +444,81 @@ DlModResult MODSDK_CALL EngineCollisionRuntime::CaptureHitboxes(
 			++snapshot->unsupportedCount;
 			continue;
 		}
+		const DlModVector3V1 localCenter = {
+			hitbox.localMinimum.x * 0.5f + hitbox.localMaximum.x * 0.5f,
+			hitbox.localMinimum.y * 0.5f + hitbox.localMaximum.y * 0.5f,
+			hitbox.localMinimum.z * 0.5f + hitbox.localMaximum.z * 0.5f
+		};
+		hitbox.worldCenter = TransformPoint(hitbox.worldMatrix, localCenter);
+		if (!IsFinite(hitbox.worldCenter)) {
+			++snapshot->unsupportedCount;
+			continue;
+		}
 		if (bindings.getElementName != nullptr) {
 			ReadName(controlObject, index, bindings.getElementName, hitbox.name);
+		}
+		if (requestedName != nullptr &&
+			std::strcmp(hitbox.name, requestedName) != 0) {
+			continue;
+		}
+		if (!AppendWireframe(hitbox, *snapshot, wireframeOutput)) {
+			++snapshot->unsupportedCount;
+			continue;
 		}
 
 		++snapshot->requiredCount;
 		if (snapshot->count < capacity) {
-			elements[snapshot->count] = hitbox;
+			StoreHitbox(
+				reinterpret_cast<std::uint8_t*>(elements) +
+					static_cast<std::size_t>(snapshot->count) * elementSize,
+				elementSize,
+				hitbox);
 			++snapshot->count;
+		}
+		if (requestedName != nullptr) {
+			return DLMOD_RESULT_SUCCESS;
 		}
 	}
 
 	if (snapshot->requiredCount == 0) {
 		return DLMOD_RESULT_NOT_FOUND;
 	}
-	return snapshot->count == snapshot->requiredCount
+	return snapshot->count == snapshot->requiredCount &&
+		(!wireframeOutput ||
+			snapshot->wireframeCount == snapshot->wireframeRequiredCount)
 		? DLMOD_RESULT_SUCCESS
 		: DLMOD_RESULT_PARTIAL_SUCCESS;
 #endif
+}
+
+DlModResult MODSDK_CALL EngineCollisionRuntime::CaptureHitboxes(
+	void* controlObject,
+	DlModHitboxSnapshotV1* snapshot) noexcept
+{
+	return CaptureHitboxesImpl(controlObject, snapshot, nullptr);
+}
+
+DlModResult MODSDK_CALL EngineCollisionRuntime::GetHitboxByName(
+	void* controlObject,
+	const char* name,
+	DlModHitboxV1* hitbox,
+	uint32_t hitboxSize) noexcept
+{
+	char requestedName[kMaximumElementNameLength]{};
+	if (hitbox == nullptr ||
+		hitboxSize < DLMOD_HITBOX_V1_BASE_SIZE ||
+		!CopyRequestedName(name, requestedName)) {
+		return DLMOD_RESULT_INVALID_ARGUMENT;
+	}
+
+	DlModHitboxSnapshotV1 snapshot{};
+	snapshot.structSize = sizeof(snapshot);
+	snapshot.abiVersion = MODSDK_ABI_VERSION;
+	snapshot.capacity = 1;
+	snapshot.elementSize = hitboxSize;
+	snapshot.elements = hitbox;
+	return CaptureHitboxesImpl(
+		controlObject,
+		&snapshot,
+		requestedName);
 }
