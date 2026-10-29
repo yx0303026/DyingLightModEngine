@@ -146,11 +146,32 @@ namespace cheat_mod {
 
 	void CheatModUi::BuildNavigation()
 	{
-		dl::imgui::Page& dashboard = navigation_->AddPage("dashboard", "Dashboard");
-		dl::imgui::Page& player = navigation_->AddPage("player", "Player");
-		dl::imgui::Page& roomList = navigation_->AddPage("room-list", "Room List");
-		dl::imgui::Page& roomMembers = navigation_->AddPage("room-members", "Room Members");
-		dl::imgui::Page& settings = navigation_->AddPage("settings", "Settings");
+		const ImVec2 pagePadding(20.0F, 18.0F);
+		dl::imgui::Page& dashboard = navigation_->AddPage(
+			"dashboard",
+			"Dashboard",
+			"Overview of the active mod session",
+			pagePadding);
+		dl::imgui::Page& player = navigation_->AddPage(
+			"player",
+			"Player",
+			"Inspect and control the local player",
+			pagePadding);
+		dl::imgui::Page& roomList = navigation_->AddPage(
+			"room-list",
+			"Room List",
+			"Browse rooms discovered by the lobby service",
+			pagePadding);
+		dl::imgui::Page& roomMembers = navigation_->AddPage(
+			"room-members",
+			"Room Members",
+			"Inspect members in the selected room",
+			pagePadding);
+		dl::imgui::Page& settings = navigation_->AddPage(
+			"settings",
+			"Settings",
+			"Configure mod behavior and runtime options",
+			pagePadding);
 		navigation_->GetNavigationBar().SetItemIcon("dashboard", dl::imgui::NavigationIcon::Home);
 		navigation_->GetNavigationBar().SetItemIcon("player", dl::imgui::NavigationIcon::Person);
 		navigation_->GetNavigationBar().SetItemIcon("room-list", dl::imgui::NavigationIcon::Game);

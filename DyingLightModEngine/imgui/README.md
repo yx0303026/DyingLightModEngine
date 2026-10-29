@@ -121,7 +121,11 @@ dl::imgui::UiContext context;
 context.Create();
 
 dl::imgui::NavigationView root(180.0F);
-auto& settings = root.AddPage("settings", "Settings");
+auto& settings = root.AddPage(
+    "settings",
+    "Settings",
+    "Configure gameplay options",
+    ImVec2(20.0F, 18.0F));
 settings.AddChild<SettingsPanel>();
 settings.AddChild<dl::imgui::ComboBox>("Resolution");
 

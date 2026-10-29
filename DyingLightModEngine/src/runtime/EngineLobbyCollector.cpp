@@ -71,6 +71,15 @@ namespace
 		void *details = nullptr;
 	};
 
+	// 成员索引选项与 EOS 详情对象内部虚表调用约定保持一致。
+	struct MemberIndexOptions final
+	{
+		std::int32_t api = 1;
+		std::uint32_t index = 0;
+	};
+
+	using MemberIndexSlotFunction = void *(*)(void *, const void *, void **);
+
 	template <typename Value>
 	bool ReadField(const void *object, std::uintptr_t offset, Value &value) noexcept
 	{
@@ -118,6 +127,42 @@ namespace
 	{
 		const char *value = nullptr;
 		return ReadField(options, offset, value) && CopyText(value, output, capacity);
+	}
+
+	const void *GetMemberByIndexFromVtable(void *details, std::int32_t index) noexcept
+	{
+		if (details == nullptr || index < 0)
+			return nullptr;
+
+		__try
+		{
+			void *implementation = nullptr;
+			void *virtualTable = nullptr;
+			void *slotAddress = nullptr;
+			if (!ReadField(details, 0x00, implementation) || implementation == nullptr ||
+				!ReadField(implementation, 0x00, virtualTable) || virtualTable == nullptr ||
+				!ReadField(
+					static_cast<const std::uint8_t *>(virtualTable) + sizeof(void *) * 8,
+					0x00,
+					slotAddress) ||
+				slotAddress == nullptr)
+				return nullptr;
+
+			MemberIndexOptions options{};
+			options.index = static_cast<std::uint32_t>(index);
+			void *outputMember = nullptr;
+			const void *returnedMember = reinterpret_cast<MemberIndexSlotFunction>(slotAddress)(
+				implementation,
+				&options,
+				&outputMember);
+			if (returnedMember != nullptr && returnedMember != reinterpret_cast<void *>(-1))
+				return returnedMember;
+			return outputMember;
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			return nullptr;
+		}
 	}
 
 	bool ReadStringAttribute(
@@ -431,7 +476,6 @@ bool EngineLobbyCollector::ResolveInterfaces() noexcept
 	resolved.getLobbyInterface = reinterpret_cast<GetLobbyInterfaceFunction>(GetProcAddress(eos, "EOS_Platform_GetLobbyInterface"));
 	resolved.getConnectInterface = reinterpret_cast<GetConnectInterfaceFunction>(GetProcAddress(eos, "EOS_Platform_GetConnectInterface"));
 	resolved.loggedInUser = reinterpret_cast<LoggedInUserFunction>(GetProcAddress(eos, "EOS_Connect_GetLoggedInUserByIndex"));
-	resolved.getMemberByIndex = reinterpret_cast<GetMemberByIndexFunction>(GetProcAddress(eos, "EOS_LobbyDetails_GetMemberByIndex"));
 	resolved.copySearchResult = reinterpret_cast<CopySearchResultFunction>(GetProcAddress(eos, "EOS_LobbySearch_CopySearchResultByIndex"));
 	resolved.releaseDetails = reinterpret_cast<DetailsReleaseFunction>(GetProcAddress(eos, "EOS_LobbyDetails_Release"));
 	if (resolved.copyDetails == nullptr || resolved.memberCount == nullptr ||
@@ -439,7 +483,6 @@ bool EngineLobbyCollector::ResolveInterfaces() noexcept
 		resolved.memberAttributeCount == nullptr || resolved.copyMemberAttributeByIndex == nullptr ||
 		resolved.productUserIdToString == nullptr || resolved.releaseAttribute == nullptr ||
 		resolved.copyInfo == nullptr || resolved.releaseInfo == nullptr ||
-		resolved.getMemberByIndex == nullptr ||
 		resolved.releaseDetails == nullptr)
 		return false;
 	std::lock_guard<std::mutex> lock(stateMutex_);
@@ -619,7 +662,7 @@ void EngineLobbyCollector::Refresh() noexcept
 	members.reserve(static_cast<std::size_t>(count));
 	for (std::int32_t index = 0; index < count; ++index)
 	{
-		const void *member = api.getMemberByIndex(details, index);
+		const void *member = GetMemberByIndexFromVtable(details, index);
 		if (member == nullptr)
 			continue;
 		char puid[64]{};

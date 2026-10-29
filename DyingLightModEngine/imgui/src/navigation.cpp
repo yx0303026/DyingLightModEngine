@@ -1,6 +1,7 @@
 #include "dl_imgui/navigation.h"
 
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 #include <stdexcept>
 
@@ -110,9 +111,11 @@ namespace dl::imgui {
 
 	} // 匿名命名空间
 
-	Page::Page(std::string title)
+	Page::Page(std::string title, std::string subtitle, ImVec2 padding)
 		: title_(std::move(title))
+		, subtitle_(std::move(subtitle))
 	{
+		SetPadding(padding);
 	}
 
 	const std::string& Page::GetTitle() const noexcept
@@ -125,9 +128,67 @@ namespace dl::imgui {
 		title_ = std::move(title);
 	}
 
+	const std::string& Page::GetSubtitle() const noexcept
+	{
+		return subtitle_;
+	}
+
+	void Page::SetSubtitle(std::string subtitle)
+	{
+		subtitle_ = std::move(subtitle);
+	}
+
+	ImVec2 Page::GetPadding() const noexcept
+	{
+		return padding_;
+	}
+
+	void Page::SetPadding(ImVec2 padding) noexcept
+	{
+		padding_.x = std::max(0.0F, padding.x);
+		padding_.y = std::max(0.0F, padding.y);
+	}
+
 	void Page::OnRender()
 	{
+		const ImVec2 padding = ScaleSize(padding_);
+		const ImVec2 available = ImGui::GetContentRegionAvail();
+		const ImVec2 contentSize(
+			std::max(0.0F, available.x),
+			std::max(0.0F, available.y));
+
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, padding);
+		if (!ImGui::BeginChild("##page_content", contentSize, false)) {
+			ImGui::EndChild();
+			ImGui::PopStyleVar();
+			return;
+		}
+
+		if (!title_.empty()) {
+			const ImVec2 titlePosition = ImGui::GetCursorScreenPos();
+			ImFont* font = ImGui::GetFont();
+			const float titleSize = ImGui::GetFontSize() * 1.2F;
+			const ImU32 titleColor = ImGui::GetColorU32(ImGuiCol_Text);
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			drawList->AddText(font, titleSize, titlePosition, titleColor, title_.c_str());
+			drawList->AddText(
+				font,
+				titleSize,
+				ImVec2(titlePosition.x + ScaleSize(0.35F), titlePosition.y),
+				titleColor,
+				title_.c_str());
+			const ImVec2 titleExtent = font->CalcTextSizeA(titleSize, FLT_MAX, 0.0F, title_.c_str());
+			ImGui::Dummy(titleExtent);
+		}
+
+		if (!subtitle_.empty()) {
+			ImGui::TextDisabled("%s", subtitle_.c_str());
+			ImGui::Spacing();
+		}
+
 		Panel::OnRender();
+		ImGui::EndChild();
+		ImGui::PopStyleVar();
 	}
 
 	void NavigationBar::AddItem(std::string id, std::string label)

@@ -31,7 +31,6 @@ public:
 	using GetLobbyInterfaceFunction = void*(*)(void*);
 	using GetConnectInterfaceFunction = void*(*)(void*);
 	using LoggedInUserFunction = const void*(*)(void*, std::int32_t);
-	using GetMemberByIndexFunction = const void*(*)(void*, std::int32_t);
 	using CopyDetailsFunction = std::int32_t(*)(void*, const void*, void**);
 	using DetailsReleaseFunction = void(*)(void*);
 	using CopySearchResultFunction = std::int32_t(*)(void*, const void*, void**);
@@ -53,7 +52,6 @@ public:
 		GetLobbyInterfaceFunction getLobbyInterface = nullptr;
 		GetConnectInterfaceFunction getConnectInterface = nullptr;
 		LoggedInUserFunction loggedInUser = nullptr;
-		GetMemberByIndexFunction getMemberByIndex = nullptr;
 		CopySearchResultFunction copySearchResult = nullptr;
 		DetailsReleaseFunction releaseDetails = nullptr;
 	};

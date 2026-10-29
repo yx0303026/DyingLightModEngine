@@ -20,16 +20,25 @@ namespace dl::imgui {
 
 	class Page : public Panel {
 	public:
-		explicit Page(std::string title = {});
+		explicit Page(
+			std::string title,
+			std::string subtitle,
+			ImVec2 padding);
 
 		const std::string& GetTitle() const noexcept;
 		void SetTitle(std::string title);
+		const std::string& GetSubtitle() const noexcept;
+		void SetSubtitle(std::string subtitle);
+		ImVec2 GetPadding() const noexcept;
+		void SetPadding(ImVec2 padding) noexcept;
 
 	protected:
 		void OnRender() override;
 
 	private:
 		std::string title_;
+		std::string subtitle_;
+		ImVec2 padding_ = ImVec2(16.0F, 16.0F);
 	};
 
 	class NavigationBar final : public UIElement {
