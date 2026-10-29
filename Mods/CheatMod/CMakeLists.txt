@@ -25,8 +25,8 @@ add_library(CheatMod SHARED
     "include/CheatModInput.h"
     "include/CheatModRuntime.h"
     "include/CheatModUi.h"
-    "../../DyingLightModEngine/include/EngineAbi.h"
-    "../../DyingLightModEngine/include/EngineLogger.h"
+    "../../DyingLightModEngine/include/sdk/EngineAbi.h"
+    "../../DyingLightModEngine/include/logging/EngineLogger.h"
     "${CHEAT_MOD_DEF}"
 )
 

@@ -22,7 +22,7 @@ add_library(CustomPakMod SHARED
     "src/PakLoader.cpp"
     "include/PakLoader.h"
     "include/PakLoaderAbi.h"
-    "../../DyingLightModEngine/include/EngineAbi.h"
+    "../../DyingLightModEngine/include/sdk/EngineAbi.h"
     "${CUSTOM_PAK_MOD_DEF}"
 )
 

@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#include "EngineAbi.h"
+#include "sdk/EngineAbi.h"
 
 #ifdef __cplusplus
 extern "C" {

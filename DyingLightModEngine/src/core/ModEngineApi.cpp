@@ -1,5 +1,6 @@
-#include "EngineAbi.h"
-#include "EngineLogger.h"
+#include "sdk/EngineAbi.h"
+#include "runtime/EngineHookRuntime.h"
+#include "logging/EngineLogger.h"
 
 #include <Windows.h>
 #include <cstring>
@@ -175,12 +176,15 @@ namespace {
 			}
 
 			DlModResult loadResult = DLMOD_RESULT_INVALID_STATE;
+			const std::string* previousLoadingMod =
+				EngineHookRuntimeDetail::SetLoadingMod(&id);
 			try {
 				loadResult = mod->onLoad(mod->context, &hostApi);
 			}
 			catch (...) {
 				loadResult = DLMOD_RESULT_INVALID_STATE;
 			}
+			EngineHookRuntimeDetail::SetLoadingMod(previousLoadingMod);
 			{
 				const ExclusiveLockGuard stateGuard(runtime.lock);
 				const auto failed = FindModRecord(runtime, id);
@@ -191,6 +195,9 @@ namespace {
 					failed->state = ModState::Loaded;
 				}
 				else {
+					if (!EngineHookRuntime::RemoveForMod(id)) {
+						EngineHookRuntime::RemoveAll();
+					}
 					EngineLogger::DestroyModContext(failed->logContext);
 					logContext = nullptr;
 					runtime.mods.erase(failed);
@@ -224,6 +231,9 @@ namespace {
 					return DLMOD_RESULT_INVALID_ARGUMENT;
 				}
 				if (existing->state != ModState::Loaded) {
+					return DLMOD_RESULT_INVALID_STATE;
+				}
+				if (!EngineHookRuntime::RemoveForMod(existing->id)) {
 					return DLMOD_RESULT_INVALID_STATE;
 				}
 				removed = *existing;
@@ -261,6 +271,7 @@ namespace {
 				runtime.hostApi = {};
 			}
 
+			EngineHookRuntime::RemoveAll();
 			for (auto mod = mods.rbegin(); mod != mods.rend(); ++mod) {
 				if (mod->onUnload != nullptr) {
 					try {

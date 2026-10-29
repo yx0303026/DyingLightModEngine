@@ -85,35 +85,49 @@ target_include_directories(DyingLightModEngineImGui
         "${CMAKE_CURRENT_LIST_DIR}/include"
         "${dearimgui_SOURCE_DIR}"
 )
-target_compile_options(DyingLightModEngineImGui PRIVATE /W4 /permissive- /EHsc)
+target_compile_options(DyingLightModEngineImGui PRIVATE /W4 /permissive- /EHsc /utf-8)
 target_link_libraries(DyingLightModEngineImGui PUBLIC DearImGui PRIVATE minhook)
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     set(DLMOD_ENGINE_DEF "${CMAKE_CURRENT_LIST_DIR}/exports/x64.def")
+    enable_language(ASM_MASM)
+    set(DLMOD_ENTITY_TRACKING_ASM "src/tracking/EngineHunterTracking.asm")
 elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
     set(DLMOD_ENGINE_DEF "${CMAKE_CURRENT_LIST_DIR}/exports/x86.def")
+    set(DLMOD_ENTITY_TRACKING_ASM "")
 else()
     message(FATAL_ERROR "DyingLightModEngine supports only x86 and x64 Windows targets")
 endif()
 
 add_library(DyingLightModEngine SHARED
-    "src/ModEngineEntry.cpp"
-    "src/ModEngineHost.cpp"
-    "src/ModEngineApi.cpp"
-    "src/EngineLogger.cpp"
-    "src/EngineModManager.cpp"
-    "src/EngineGraphicsRuntime.cpp"
-    "src/EngineInputRuntime.cpp"
-    "src/EngineDirectInputRuntime.cpp"
-    "src/EngineCollisionRuntime.cpp"
-    "include/EngineHost.h"
-    "include/EngineAbi.h"
-    "include/EngineLogger.h"
-    "include/EngineModManager.h"
-    "include/EngineGraphicsRuntime.h"
-    "include/EngineInputRuntime.h"
-    "include/EngineDirectInputRuntime.h"
-    "include/EngineCollisionRuntime.h"
+    "src/core/ModEngineEntry.cpp"
+    "src/core/ModEngineHost.cpp"
+    "src/core/ModEngineApi.cpp"
+    "src/logging/EngineLogger.cpp"
+    "src/managers/EngineModManager.cpp"
+    "src/runtime/EngineGraphicsRuntime.cpp"
+    "src/runtime/EngineInputRuntime.cpp"
+    "src/runtime/EngineDirectInputRuntime.cpp"
+    "src/runtime/EngineCollisionRuntime.cpp"
+    "src/runtime/EngineHookRuntime.cpp"
+    "src/runtime/EngineEntityBindings.cpp"
+    "src/runtime/EngineEntityRuntime.cpp"
+    "src/tracking/EngineHunterTrackingRuntime.cpp"
+    "${DLMOD_ENTITY_TRACKING_ASM}"
+    "include/core/EngineHost.h"
+    "include/sdk/EngineAbi.h"
+    "include/logging/EngineLogger.h"
+    "include/managers/EngineModManager.h"
+    "include/runtime/EngineGraphicsRuntime.h"
+    "include/runtime/EngineInputRuntime.h"
+    "include/runtime/EngineDirectInputRuntime.h"
+    "include/runtime/EngineCollisionRuntime.h"
+    "include/runtime/EngineHookRuntime.h"
+    "include/runtime/EngineEntityBindings.h"
+    "include/runtime/EngineEntityRuntime.h"
+    "include/tracking/EngineHunterTrackingRuntime.h"
+    "include/tracking/EngineHunterMotionTracker.h"
+    "src/tracking/EngineHunterMotionTracker.cpp"
     "${DLMOD_ENGINE_DEF}"
 )
 
@@ -122,7 +136,12 @@ target_compile_definitions(DyingLightModEngine PRIVATE MODSDK_BUILD WIN32_LEAN_A
 target_include_directories(DyingLightModEngine
     PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include"
 )
-target_compile_options(DyingLightModEngine PRIVATE /W4 /permissive- /EHsc)
+target_compile_options(DyingLightModEngine PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:/W4>
+    $<$<COMPILE_LANGUAGE:CXX>:/permissive->
+    $<$<COMPILE_LANGUAGE:CXX>:/EHsc>
+    $<$<COMPILE_LANGUAGE:CXX>:/utf-8>
+)
 target_link_libraries(DyingLightModEngine PRIVATE DyingLightModEngineImGui minhook d3d11 dxgi dxguid)
 set_target_properties(DyingLightModEngine PROPERTIES OUTPUT_NAME "DyingLightModEngine")
 

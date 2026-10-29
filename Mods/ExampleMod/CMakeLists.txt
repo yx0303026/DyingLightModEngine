@@ -19,8 +19,8 @@ endif()
 
 add_library(ExampleMod SHARED
     "src/ExampleMod.cpp"
-    "../../DyingLightModEngine/include/EngineAbi.h"
-    "../../DyingLightModEngine/include/EngineLogger.h"
+    "../../DyingLightModEngine/include/sdk/EngineAbi.h"
+    "../../DyingLightModEngine/include/logging/EngineLogger.h"
     "${EXAMPLE_MOD_DEF}"
 )
 

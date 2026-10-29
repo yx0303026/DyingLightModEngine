@@ -1,6 +1,6 @@
-#include "EngineDirectInputRuntime.h"
+#include "runtime/EngineDirectInputRuntime.h"
 
-#include "EngineLogger.h"
+#include "logging/EngineLogger.h"
 
 #include <MinHook.h>
 

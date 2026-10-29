@@ -1,6 +1,6 @@
 #include "CheatModRuntime.h"
 
-#include "EngineLogger.h"
+#include "logging/EngineLogger.h"
 
 namespace cheat_mod {
 

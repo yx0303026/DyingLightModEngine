@@ -3,7 +3,7 @@
 #include "CheatModInput.h"
 #include "CheatModUi.h"
 
-#include "EngineAbi.h"
+#include "sdk/EngineAbi.h"
 
 #include <cstdint>
 

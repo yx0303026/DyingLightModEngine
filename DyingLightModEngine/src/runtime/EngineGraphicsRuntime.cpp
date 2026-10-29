@@ -1,6 +1,6 @@
-#include "EngineGraphicsRuntime.h"
+#include "runtime/EngineGraphicsRuntime.h"
 
-#include "EngineModManager.h"
+#include "managers/EngineModManager.h"
 
 #include <d3d11.h>
 #include <functional>

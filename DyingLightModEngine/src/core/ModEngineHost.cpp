@@ -1,11 +1,13 @@
-#include "EngineHost.h"
+#include "core/EngineHost.h"
 
-#include "EngineAbi.h"
-#include "EngineDirectInputRuntime.h"
-#include "EngineCollisionRuntime.h"
-#include "EngineGraphicsRuntime.h"
-#include "EngineLogger.h"
-#include "EngineModManager.h"
+#include "sdk/EngineAbi.h"
+#include "runtime/EngineDirectInputRuntime.h"
+#include "runtime/EngineCollisionRuntime.h"
+#include "runtime/EngineEntityRuntime.h"
+#include "runtime/EngineGraphicsRuntime.h"
+#include "runtime/EngineHookRuntime.h"
+#include "logging/EngineLogger.h"
+#include "managers/EngineModManager.h"
 
 namespace {
 
@@ -39,7 +41,9 @@ bool InitializeModEngine(HMODULE engineModule) noexcept
 		nullptr,
 		&EngineLogger::HostCallback,
 		&EngineDirectInputRuntime::GetUiMouseState,
-		EngineCollisionRuntime::GetApi()
+		EngineCollisionRuntime::GetApi(),
+		EngineEntityRuntime::GetApi(),
+		EngineHookRuntime::GetApi()
 	};
 	if (engineApi.initialize(&hostApi) != DLMOD_RESULT_SUCCESS) {
 		OutputDebugStringA("[DyingLightModEngine] Engine initialization failed\n");
@@ -86,5 +90,8 @@ bool ShutdownModEngine() noexcept
 	}
 
 	const DlModResult shutdownResult = engineApi.shutdown();
+	if (shutdownResult == DLMOD_RESULT_SUCCESS) {
+		EngineEntityRuntime::Shutdown();
+	}
 	return shutdownResult == DLMOD_RESULT_SUCCESS;
 }

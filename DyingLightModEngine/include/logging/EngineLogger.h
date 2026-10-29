@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <Windows.h>
 
-#include "EngineAbi.h"
+#include "sdk/EngineAbi.h"
 
 #ifdef __cplusplus
 

@@ -1,7 +1,7 @@
-#include "EngineInputRuntime.h"
+#include "runtime/EngineInputRuntime.h"
 
-#include "EngineDirectInputRuntime.h"
-#include "EngineModManager.h"
+#include "runtime/EngineDirectInputRuntime.h"
+#include "managers/EngineModManager.h"
 
 #include <dxgi.h>
 
