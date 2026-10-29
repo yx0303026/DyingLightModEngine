@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -69,6 +70,31 @@ namespace
 	{
 		return std::isfinite(value.x) && std::isfinite(value.y) &&
 			std::isfinite(value.z);
+	}
+
+	/* FindObjectsInRadius allocates its buffer on the game-side UCRT heap. The
+	   Debug engine links the Debug CRT, so a plain std::free trips
+	   _CrtIsValidHeapPointer. Release through the shared ucrtbase instead. */
+	void FreeGameBuffer(void* block) noexcept
+	{
+		if (block == nullptr)
+			return;
+		using FreeFunction = void(__cdecl*)(void*);
+		static std::atomic<void*> sharedFreeStorage{ nullptr };
+		void* local = sharedFreeStorage.load(std::memory_order_acquire);
+		if (local == nullptr)
+		{
+			local = reinterpret_cast<void*>(
+				GetProcAddress(GetModuleHandleW(L"ucrtbase.dll"), "free"));
+			sharedFreeStorage.store(local, std::memory_order_release);
+		}
+		const auto sharedFree = reinterpret_cast<FreeFunction>(local);
+		if (sharedFree != nullptr)
+		{
+			sharedFree(block);
+			return;
+		}
+		std::free(block);
 	}
 
 	DlModVector3V1 DeriveUp(
@@ -134,6 +160,116 @@ namespace
 	bool IsHuman(const void* entity) noexcept
 	{
 		return IsPlayer(entity) && !IsHunter(entity);
+	}
+
+	enum EntityClassFlags : std::uint32_t
+	{
+		EntityClassPlayer = 0x00000001u,
+		EntityClassHumanVisual = 0x00000002u,
+		EntityClassZombieVisual = 0x00000004u
+	};
+
+	struct EntityClassEntry
+	{
+		std::uintptr_t vtable = 0;
+		std::uint32_t flags = 0;
+	};
+
+	constexpr std::size_t kEntityClassCacheSize = 64;
+	thread_local EntityClassEntry g_entityClassCache[kEntityClassCacheSize]{};
+	thread_local std::size_t g_entityClassCursor = 0;
+	thread_local std::uintptr_t g_lastEntityVtable = 0;
+	thread_local std::uint32_t g_lastEntityFlags = 0;
+
+	/* 按虚表缓�?RTTI 分类结果，避免逐实体重复遍历类层级�?*/
+	std::uint32_t ClassifyEntityType(const void* entity) noexcept
+	{
+		std::uintptr_t vtable = 0;
+		if (!ReadField(entity, 0, vtable) || vtable == 0)
+			return 0;
+		if (vtable == g_lastEntityVtable)
+			return g_lastEntityFlags;
+		for (const EntityClassEntry& entry : g_entityClassCache)
+		{
+			if (entry.vtable == vtable)
+			{
+				g_lastEntityVtable = vtable;
+				g_lastEntityFlags = entry.flags;
+				return entry.flags;
+			}
+		}
+
+		std::uint32_t flags = 0;
+		if (EngineEntityBindings::IsDerivedFrom(entity, "PlayerDI"))
+		{
+			flags |= EntityClassPlayer;
+		}
+		else if (EngineEntityBindings::IsDerivedFrom(entity, "ZombieAIVis"))
+		{
+			flags |= EntityClassZombieVisual;
+		}
+		else if (EngineEntityBindings::IsDerivedFrom(entity, "HumanAIVis"))
+		{
+			flags |= EntityClassHumanVisual;
+		}
+		else if (EngineEntityBindings::IsDerivedFrom(entity, "ActorDI"))
+		{
+			void* visual = nullptr;
+			if (ReadField(
+				entity, EngineEntityBindings::ActorVisualOffset, visual) &&
+				visual != nullptr)
+			{
+				if (EngineEntityBindings::IsDerivedFrom(visual, "ZombieAIVis"))
+					flags |= EntityClassZombieVisual;
+				else if (EngineEntityBindings::IsDerivedFrom(visual, "HumanAIVis"))
+					flags |= EntityClassHumanVisual;
+			}
+		}
+
+		g_entityClassCache[g_entityClassCursor] = { vtable, flags };
+		g_entityClassCursor = (g_entityClassCursor + 1) %
+			kEntityClassCacheSize;
+		g_lastEntityVtable = vtable;
+		g_lastEntityFlags = flags;
+		return flags;
+	}
+
+	void* FindActiveLevel(const EngineEntityBindings& bindings) noexcept
+	{
+		const HMODULE game = EngineEntityBindings::GameModule();
+		std::uintptr_t gameInstance = 0;
+		if (!ReadField(
+			reinterpret_cast<const void*>(game),
+			EngineEntityBindings::GameGlobalRva,
+			gameInstance) ||
+			gameInstance == 0)
+		{
+			return nullptr;
+		}
+		__try
+		{
+			return bindings.getActiveLevel(reinterpret_cast<void*>(gameInstance));
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			return nullptr;
+		}
+	}
+
+	std::uint32_t EntityKindOf(const void* entity) noexcept
+	{
+		const std::uint32_t flags = ClassifyEntityType(entity);
+		if ((flags & EntityClassPlayer) != 0)
+		{
+			return ReadModelId(entity) == EngineEntityBindings::HunterModelId
+				? DLMOD_ENTITY_KIND_HUNTER
+				: DLMOD_ENTITY_KIND_HUMAN;
+		}
+		if ((flags & EntityClassZombieVisual) != 0)
+			return DLMOD_ENTITY_KIND_ZOMBIE;
+		if ((flags & EntityClassHumanVisual) != 0)
+			return DLMOD_ENTITY_KIND_HUMAN;
+		return DLMOD_ENTITY_KIND_ENTITY;
 	}
 
 	bool ReadReplicationId(
@@ -224,18 +360,18 @@ namespace
 				level, &collection, &center, kLocalSearchRadius,
 				nullptr, false, nullptr) || collection.items == nullptr)
 			{
-				std::free(collection.items);
+				FreeGameBuffer(collection.items);
 				return nullptr;
 			}
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER)
 		{
-			std::free(collection.items);
+			FreeGameBuffer(collection.items);
 			return nullptr;
 		}
 		if (collection.count > collection.capacity || collection.count > 65536)
 		{
-			std::free(collection.items);
+			FreeGameBuffer(collection.items);
 			return nullptr;
 		}
 
@@ -257,7 +393,7 @@ namespace
 				break;
 			}
 		}
-		std::free(collection.items);
+		FreeGameBuffer(collection.items);
 		if (result != nullptr)
 		{
 			AcquireSRWLockExclusive(&g_localEntityCacheLock);
@@ -463,7 +599,9 @@ const DlModEntityApiV1* EngineEntityRuntime::GetApi() noexcept
 		&ReadBonePosition,
 		&ReadHunterMotion,
 		&InstallHunterTracking,
-		&IsHunterTrackingInstalled
+		&IsHunterTrackingInstalled,
+		&EnumerateNearby,
+		&ReadBoneByName
 	};
 #if defined(_M_X64)
 	return EngineEntityBindings::Resolve() != nullptr ? &api : nullptr;
@@ -475,6 +613,23 @@ const DlModEntityApiV1* EngineEntityRuntime::GetApi() noexcept
 void EngineEntityRuntime::Shutdown() noexcept
 {
 	EngineHunterTrackingRuntime::Shutdown();
+}
+
+void *EngineEntityRuntime::LocalEntityInstance() noexcept
+{
+	const EngineEntityBindings *bindings = EngineEntityBindings::Resolve();
+	return bindings == nullptr ? nullptr : FindLocalEntity(*bindings);
+}
+
+bool EngineEntityRuntime::ReadEntityHealth(
+	const void *entity,
+	float &bodyHealth) noexcept
+{
+	bodyHealth = 0.0F;
+	float bloodMask = 0.0F;
+	std::uint64_t damager = 0;
+	return entity != nullptr &&
+		ReadHealth(entity, bodyHealth, bloodMask, damager);
 }
 
 DlModResult MODSDK_CALL EngineEntityRuntime::GetLocalEntity(DlModEntityV1* entity) noexcept
@@ -741,4 +896,128 @@ DlModResult MODSDK_CALL EngineEntityRuntime::InstallHunterTracking() noexcept
 uint8_t MODSDK_CALL EngineEntityRuntime::IsHunterTrackingInstalled() noexcept
 {
 	return EngineHunterTrackingRuntime::IsInstalled() ? 1U : 0U;
+}
+
+DlModResult MODSDK_CALL EngineEntityRuntime::EnumerateNearby(
+	const DlModVector3V1* center,
+	float radius,
+	DlModNearbyEntityV1* entities,
+	uint32_t capacity,
+	uint32_t* count) noexcept
+{
+	if (center == nullptr || entities == nullptr || count == nullptr ||
+		capacity == 0 || !IsFinite(*center) || !std::isfinite(radius) ||
+		radius <= 0.0F || radius > 500.0F)
+	{
+		return DLMOD_RESULT_INVALID_ARGUMENT;
+	}
+	*count = 0;
+	const EngineEntityBindings* bindings = EngineEntityBindings::Resolve();
+	if (bindings == nullptr)
+		return DLMOD_RESULT_UNSUPPORTED_FEATURE;
+	void* level = FindActiveLevel(*bindings);
+	if (level == nullptr)
+		return DLMOD_RESULT_NOT_FOUND;
+
+	ControlObjectCollection collection{};
+	bool queried = false;
+	__try
+	{
+		queried = bindings->findObjects(
+			level, &collection, center, radius, nullptr, false, nullptr);
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		queried = false;
+		collection = {};
+	}
+	if (!queried || collection.items == nullptr)
+	{
+		FreeGameBuffer(collection.items);
+		return DLMOD_RESULT_NOT_FOUND;
+	}
+	if (collection.count > 65536 || collection.count > collection.capacity)
+	{
+		FreeGameBuffer(collection.items);
+		return DLMOD_RESULT_INVALID_STATE;
+	}
+
+	std::uint32_t written = 0;
+	for (std::uint32_t index = 0;
+		index < collection.count && written < capacity;
+		++index)
+	{
+		void* control = nullptr;
+		if (!ReadField(collection.items, index * sizeof(void*), control) ||
+			control == nullptr)
+		{
+			continue;
+		}
+		auto* entity = static_cast<std::uint8_t*>(control) -
+			EngineEntityBindings::ControlObjectOffset;
+		DlModNearbyEntityV1 item{};
+		item.structSize = sizeof(DlModNearbyEntityV1);
+		item.kind = EntityKindOf(entity);
+		item.identity = static_cast<std::uint64_t>(
+			reinterpret_cast<std::uintptr_t>(entity));
+		item.entity.instance = entity;
+		DlModVector3V1 position{};
+		if (ReadPosition(*bindings, entity, position))
+		{
+			item.position = position;
+			item.validFields |= DLMOD_ENTITY_HAS_POSITION;
+		}
+		entities[written] = item;
+		++written;
+	}
+	FreeGameBuffer(collection.items);
+	*count = written;
+	return written < collection.count
+		? DLMOD_RESULT_PARTIAL_SUCCESS
+		: DLMOD_RESULT_SUCCESS;
+}
+
+DlModResult MODSDK_CALL EngineEntityRuntime::ReadBoneByName(
+	const DlModEntityV1* entity,
+	const char* name,
+	DlModVector3V1* position) noexcept
+{
+	if (!IsValidHandle(entity) || name == nullptr || position == nullptr)
+		return DLMOD_RESULT_INVALID_ARGUMENT;
+	*position = {};
+	const EngineEntityBindings* bindings = EngineEntityBindings::Resolve();
+	if (bindings == nullptr || bindings->getElementOrBoneElementId == nullptr ||
+		bindings->resolveBone == nullptr ||
+		bindings->getBonePosition == nullptr)
+	{
+		return DLMOD_RESULT_UNSUPPORTED_FEATURE;
+	}
+	void* control = AsControlObject(entity->instance);
+	void* model = nullptr;
+	if (!ReadField(control, 0x08, model) || model == nullptr ||
+		!EngineEntityBindings::IsDerivedFrom(model, "CModelObject"))
+	{
+		return DLMOD_RESULT_NOT_FOUND;
+	}
+	DlModVector3V1 value{};
+	__try
+	{
+		const int boneId = bindings->getElementOrBoneElementId(control, name);
+		if (boneId < 0 || boneId > 0xFF)
+			return DLMOD_RESULT_NOT_FOUND;
+		const auto id = static_cast<std::uint8_t>(boneId);
+		if (bindings->resolveBone(control, id) < 0)
+			return DLMOD_RESULT_NOT_FOUND;
+		if (bindings->getBonePosition(control, &value, id) != &value ||
+			!IsFinite(value))
+		{
+			return DLMOD_RESULT_NOT_FOUND;
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return DLMOD_RESULT_INVALID_STATE;
+	}
+	*position = value;
+	return DLMOD_RESULT_SUCCESS;
 }

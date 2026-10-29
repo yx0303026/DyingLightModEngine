@@ -13,6 +13,14 @@ namespace cheat_mod {
 		}
 
 		try {
+			bulletTracking_.SetEntityApi(hostApi->entity);
+			if (hostApi->structSize >= DLMOD_HOST_API_V1_PROJECTILE_SIZE) {
+				bulletTracking_.SetProjectileApi(hostApi->projectile);
+			}
+			if (hostApi->structSize >= DLMOD_HOST_API_V1_CAMERA_SIZE) {
+				bulletTracking_.SetCameraApi(hostApi->camera);
+			}
+			ui_.SetBulletTracking(&bulletTracking_);
 			if (!ui_.Initialize()) {
 				return DLMOD_RESULT_INVALID_STATE;
 			}
@@ -46,6 +54,7 @@ namespace cheat_mod {
 			return;
 		}
 
+		bulletTracking_.Shutdown();
 		input_.Stop();
 		ui_.Shutdown();
 		ui_.SetMouseStateProvider(nullptr);

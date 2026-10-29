@@ -22,3 +22,6 @@ CMakeUserPresets.json
 **/build/
 **/out/
 **/lib/
+tools/
+.ida_work/
+.analysis/

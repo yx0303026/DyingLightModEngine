@@ -158,7 +158,8 @@ namespace dl::imgui {
 			std::max(0.0F, available.y));
 
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, padding);
-		if (!ImGui::BeginChild("##page_content", contentSize, false)) {
+		// ImGui 会将无边框子窗口的 WindowPadding 重置为零，必须显式要求沿用推入的内边距。
+		if (!ImGui::BeginChild("##page_content", contentSize, ImGuiChildFlags_AlwaysUseWindowPadding)) {
 			ImGui::EndChild();
 			ImGui::PopStyleVar();
 			return;

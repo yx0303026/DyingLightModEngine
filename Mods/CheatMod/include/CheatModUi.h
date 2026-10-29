@@ -2,6 +2,7 @@
 
 #include "dl_imgui/imgui.h"
 
+#include "CheatModBulletTracking.h"
 #include "CheatModLobby.h"
 #include "CheatModLobbyView.h"
 
@@ -38,12 +39,15 @@ namespace cheat_mod {
 		void Toggle() noexcept;
 		void SetMouseStateProvider(ModEngineGetUiMouseStateFn provider) noexcept;
 		void SetLobbyApi(const DlModLobbyApiV1* api) noexcept;
+		void SetBulletTracking(CheatModBulletTracking* tracking) noexcept;
 
 	private:
 		void BuildNavigation();
 		void BuildDashboardPage(dl::imgui::Page& page);
 		void BuildPlayerPage(dl::imgui::Page& page);
+		void BuildBulletTrackingPage(dl::imgui::Page& page);
 		void BuildSettingsPage(dl::imgui::Page& page);
+		void UpdateTrackingLabels();
 		void OnGodModeChanged(bool enabled) noexcept;
 		void OnInfiniteStaminaChanged(bool enabled) noexcept;
 		void OnUiScaleChanged(float scale) noexcept;
@@ -56,6 +60,9 @@ namespace cheat_mod {
 		std::unique_ptr<dl::imgui::NavigationView> navigation_;
 		CheatModLobby lobby_;
 		CheatModLobbyView lobbyView_;
+		CheatModBulletTracking* bulletTracking_ = nullptr;
+		dl::imgui::Label* trackingStatusLabel_ = nullptr;
+		dl::imgui::Label* trackingStatsLabel_ = nullptr;
 		IDXGISwapChain* swapChain_ = nullptr;
 		ID3D11Device* device_ = nullptr;
 		ID3D11DeviceContext* deviceContext_ = nullptr;

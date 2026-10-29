@@ -6,6 +6,7 @@
 #include <imgui_impl_win32.h>
 
 #include <functional>
+#include <string>
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
 	HWND window,
@@ -59,8 +60,13 @@ namespace cheat_mod {
 		ImGui_ImplDX11_NewFrame();
 		ImGui_ImplWin32_NewFrame();
 		context_.BeginFrame();
+		if (bulletTracking_ != nullptr) {
+			bulletTracking_->Refresh();
+			bulletTracking_->DrawOverlay();
+		}
 		engineMouse_.store(open && context_.IsMouseProviderActive());
 		if (open) {
+			UpdateTrackingLabels();
 			ImGui::SetNextWindowSize(dl::imgui::ScaleSize(ImVec2(980.0F, 640.0F)), ImGuiCond_FirstUseEver);
 			if (ImGui::Begin("Cheat Mod", &open, ImGuiWindowFlags_NoCollapse)) {
 				context_.Render(*navigation_);
@@ -96,6 +102,11 @@ namespace cheat_mod {
 	void CheatModUi::SetLobbyApi(const DlModLobbyApiV1* api) noexcept
 	{
 		lobby_.SetApi(api);
+	}
+
+	void CheatModUi::SetBulletTracking(CheatModBulletTracking* tracking) noexcept
+	{
+		bulletTracking_ = tracking;
 	}
 
 	void CheatModUi::HandleWindowMessage(
@@ -146,7 +157,7 @@ namespace cheat_mod {
 
 	void CheatModUi::BuildNavigation()
 	{
-		const ImVec2 pagePadding(20.0F, 18.0F);
+		const ImVec2 pagePadding(8.0F, 8.0F);
 		dl::imgui::Page& dashboard = navigation_->AddPage(
 			"dashboard",
 			"Dashboard",
@@ -156,6 +167,11 @@ namespace cheat_mod {
 			"player",
 			"Player",
 			"Inspect and control the local player",
+			pagePadding);
+		dl::imgui::Page& bulletTracking = navigation_->AddPage(
+			"bullet-tracking",
+			"Bullet Tracking",
+			"Lock a target and steer projectiles toward it",
 			pagePadding);
 		dl::imgui::Page& roomList = navigation_->AddPage(
 			"room-list",
@@ -174,11 +190,13 @@ namespace cheat_mod {
 			pagePadding);
 		navigation_->GetNavigationBar().SetItemIcon("dashboard", dl::imgui::NavigationIcon::Home);
 		navigation_->GetNavigationBar().SetItemIcon("player", dl::imgui::NavigationIcon::Person);
+		navigation_->GetNavigationBar().SetItemIcon("bullet-tracking", dl::imgui::NavigationIcon::Tools);
 		navigation_->GetNavigationBar().SetItemIcon("room-list", dl::imgui::NavigationIcon::Game);
 		navigation_->GetNavigationBar().SetItemIcon("room-members", dl::imgui::NavigationIcon::Person);
 		navigation_->GetNavigationBar().SetItemIcon("settings", dl::imgui::NavigationIcon::Settings);
 		BuildDashboardPage(dashboard);
 		BuildPlayerPage(player);
+		BuildBulletTrackingPage(bulletTracking);
 		lobbyView_.BuildRoomListPage(roomList);
 		lobbyView_.BuildMembersPage(roomMembers);
 		BuildSettingsPage(settings);
@@ -200,6 +218,114 @@ namespace cheat_mod {
 		page.AddChild<dl::imgui::Label>("Player");
 		page.AddChild<dl::imgui::Slider>("Movement speed", playerSpeed_, 0.25F, 3.0F);
 		page.AddChild<dl::imgui::Label>("Player controls are kept in this page so new features can be added independently.");
+	}
+
+	void CheatModUi::BuildBulletTrackingPage(dl::imgui::Page& page)
+	{
+		page.AddChild<dl::imgui::Label>("Steers arrows, bolts and bullets toward the locked target.");
+		if (bulletTracking_ == nullptr || !bulletTracking_->IsAvailable()) {
+			page.AddChild<dl::imgui::Label>("The engine projectile API is unavailable in this build.");
+			return;
+		}
+
+		dl::imgui::CheckBox& enabled = page.AddChild<dl::imgui::CheckBox>(
+			"Enable bullet tracking", bulletTracking_->IsEnabled());
+		enabled.SetOnChanged([this](bool value) {
+			bulletTracking_->SetEnabled(value);
+		});
+		dl::imgui::CheckBox& showTarget = page.AddChild<dl::imgui::CheckBox>(
+			"Show target marker", bulletTracking_->IsShowTarget());
+		showTarget.SetOnChanged([this](bool value) {
+			bulletTracking_->SetShowTarget(value);
+		});
+
+		page.AddChild<dl::imgui::Separator>();
+		dl::imgui::ComboBox& lockMode = page.AddChild<dl::imgui::ComboBox>("Lock mode");
+		lockMode.SetItems({ "Body", "Head" });
+		lockMode.SetSelectedIndex(bulletTracking_->GetLockMode());
+		lockMode.SetOnSelectionChanged([this](int index, const std::string&) {
+			bulletTracking_->SetLockMode(index);
+		});
+
+		dl::imgui::Slider& precision = page.AddChild<dl::imgui::Slider>(
+			"Precision", bulletTracking_->GetPrecision(), 0.0F, 1.0F);
+		precision.SetOnChanged([this](float value) {
+			bulletTracking_->SetPrecision(value);
+		});
+		dl::imgui::Slider& turnRate = page.AddChild<dl::imgui::Slider>(
+			"Turn rate", bulletTracking_->GetTurnRate(), 0.1F, 30.0F);
+		turnRate.SetOnChanged([this](float value) {
+			bulletTracking_->SetTurnRate(value);
+		});
+		dl::imgui::Slider& turnRadius = page.AddChild<dl::imgui::Slider>(
+			"Turn radius", bulletTracking_->GetTurnRadius(), 0.0F, 200.0F);
+		turnRadius.SetOnChanged([this](float value) {
+			bulletTracking_->SetTurnRadius(value);
+		});
+		dl::imgui::Slider& maximumDistance = page.AddChild<dl::imgui::Slider>(
+			"Maximum distance", bulletTracking_->GetMaximumDistance(), 10.0F, 300.0F);
+		maximumDistance.SetOnChanged([this](float value) {
+			bulletTracking_->SetMaximumDistance(value);
+		});
+		dl::imgui::Slider& fovRadius = page.AddChild<dl::imgui::Slider>(
+			"FOV radius (px)", bulletTracking_->GetFovRadius(), 0.0F, 800.0F);
+		fovRadius.SetOnChanged([this](float value) {
+			bulletTracking_->SetFovRadius(value);
+		});
+
+		page.AddChild<dl::imgui::Separator>();
+		dl::imgui::CheckBox& humans = page.AddChild<dl::imgui::CheckBox>(
+			"Target humans", bulletTracking_->IsTargetKindEnabled(0));
+		humans.SetOnChanged([this](bool value) {
+			bulletTracking_->SetTargetKind(0, value);
+		});
+		dl::imgui::CheckBox& hunters = page.AddChild<dl::imgui::CheckBox>(
+			"Target night hunters", bulletTracking_->IsTargetKindEnabled(1));
+		hunters.SetOnChanged([this](bool value) {
+			bulletTracking_->SetTargetKind(1, value);
+		});
+		dl::imgui::CheckBox& zombies = page.AddChild<dl::imgui::CheckBox>(
+			"Target infected", bulletTracking_->IsTargetKindEnabled(2));
+		zombies.SetOnChanged([this](bool value) {
+			bulletTracking_->SetTargetKind(2, value);
+		});
+		dl::imgui::CheckBox& arrows = page.AddChild<dl::imgui::CheckBox>(
+			"Steer arrows", bulletTracking_->IsProjectileKindEnabled(0));
+		arrows.SetOnChanged([this](bool value) {
+			bulletTracking_->SetProjectileKind(0, value);
+		});
+		dl::imgui::CheckBox& bolts = page.AddChild<dl::imgui::CheckBox>(
+			"Steer bolts", bulletTracking_->IsProjectileKindEnabled(1));
+		bolts.SetOnChanged([this](bool value) {
+			bulletTracking_->SetProjectileKind(1, value);
+		});
+		dl::imgui::CheckBox& bullets = page.AddChild<dl::imgui::CheckBox>(
+			"Steer bullets", bulletTracking_->IsProjectileKindEnabled(2));
+		bullets.SetOnChanged([this](bool value) {
+			bulletTracking_->SetProjectileKind(2, value);
+		});
+
+		page.AddChild<dl::imgui::Separator>();
+		trackingStatusLabel_ = &page.AddChild<dl::imgui::Label>(bulletTracking_->GetStatusText());
+		trackingStatsLabel_ = &page.AddChild<dl::imgui::Label>("");
+	}
+
+	void CheatModUi::UpdateTrackingLabels()
+	{
+		if (bulletTracking_ == nullptr) {
+			return;
+		}
+		if (trackingStatusLabel_ != nullptr) {
+			trackingStatusLabel_->SetText(std::string("Status: ") + bulletTracking_->GetStatusText());
+		}
+		if (trackingStatsLabel_ != nullptr) {
+			const BulletTrackingStats& stats = bulletTracking_->GetStats();
+			trackingStatsLabel_->SetText(
+				"Updates " + std::to_string(stats.updates) +
+				" | Candidates " + std::to_string(stats.candidates) +
+				" | Adjusted " + std::to_string(stats.adjusted) +
+				" | Targets " + std::to_string(stats.targetsFound));
+		}
 	}
 
 	void CheatModUi::BuildSettingsPage(dl::imgui::Page& page)

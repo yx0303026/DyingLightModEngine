@@ -1,9 +1,11 @@
 #pragma once
 
+#include "sdk/EngineCameraAbi.h"
 #include "sdk/EngineCollisionAbi.h"
 #include "sdk/EngineEntityAbi.h"
 #include "sdk/EngineHookAbi.h"
 #include "sdk/EngineLobbyAbi.h"
+#include "sdk/EngineProjectileAbi.h"
 #include "sdk/EngineUiInputAbi.h"
 
 /* Host ABI 概览：定义引擎提供给模组的上下文、日志和可选能力函数表。 */
@@ -28,6 +30,10 @@ extern "C"
 		const DlModHookApiV1 *hooks;
 		/* 追加字段以保持旧 Host 布局兼容。 */
 		const DlModLobbyApiV1 *lobby;
+		/* 弹丸管理器 API 不可用时为空。 */
+		const DlModProjectileManagerApiV1 *projectile;
+		/* 活动相机 API 不可用时为空。 */
+		const DlModCameraApiV1 *camera;
 	};
 
 #define DLMOD_HOST_API_V1_MOUSE_STATE_SIZE \
@@ -40,6 +46,10 @@ extern "C"
 	((uint32_t)(offsetof(DlModHostApiV1, entity) + sizeof(const DlModEntityApiV1 *)))
 #define DLMOD_HOST_API_V1_HOOKS_SIZE \
 	((uint32_t)(offsetof(DlModHostApiV1, hooks) + sizeof(const DlModHookApiV1 *)))
+#define DLMOD_HOST_API_V1_PROJECTILE_SIZE \
+	((uint32_t)(offsetof(DlModHostApiV1, projectile) + sizeof(const DlModProjectileManagerApiV1 *)))
+#define DLMOD_HOST_API_V1_CAMERA_SIZE \
+	((uint32_t)(offsetof(DlModHostApiV1, camera) + sizeof(const DlModCameraApiV1 *)))
 
 #ifdef __cplusplus
 }

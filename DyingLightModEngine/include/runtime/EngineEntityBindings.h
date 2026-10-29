@@ -2,6 +2,7 @@
 
 #include <Windows.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 
@@ -20,6 +21,8 @@ public:
 	using FindObjectsFunction = bool(__fastcall*)(void*, void*, const void*, float, const void*, bool, int*);
 	using BonePositionFunction = void* (__fastcall*)(void*, void*, std::uint8_t);
 	using ResolveBoneFunction = int(__fastcall*)(void*, std::uint8_t);
+	using CameraMatrixFunction = const float* (__fastcall*)(void*);
+	using ElementOrBoneIdFunction = int(__fastcall*)(void*, const char*);
 
 	static constexpr std::uintptr_t GameGlobalRva = 0x1C16348;
 	static constexpr std::uintptr_t GetForwardVectorImportRva = 0x137EAC0;
@@ -39,12 +42,18 @@ public:
 	static constexpr std::uintptr_t HealthModuleVtableRva = 0x1455158;
 	static constexpr std::uintptr_t BodyPartsHealthModuleVtableRva = 0x1447AF0;
 	static constexpr std::uintptr_t ReplicationIdOffset = 0x06;
+	static constexpr std::uintptr_t ActorVisualOffset = 0x338;
 
 	static HMODULE GameModule() noexcept;
 	static HMODULE EngineModule() noexcept;
 	static bool IsSupportedGame(HMODULE module) noexcept;
 	static bool IsSupportedEngine(HMODULE module) noexcept;
 	static bool IsDerivedFrom(const void* object, std::string_view className) noexcept;
+	/* 读取对象动态类型的装饰名，用于弹丸视觉类别判定。 */
+	static bool ReadTypeName(
+		const void* object,
+		char* buffer,
+		std::size_t capacity) noexcept;
 	static const EngineEntityBindings* Resolve() noexcept;
 
 	VectorGetter getPosition = nullptr;
@@ -62,4 +71,6 @@ public:
 	FindObjectsFunction findObjects = nullptr;
 	BonePositionFunction getBonePosition = nullptr;
 	ResolveBoneFunction resolveBone = nullptr;
+	CameraMatrixFunction getCameraMatrix = nullptr;
+	ElementOrBoneIdFunction getElementOrBoneElementId = nullptr;
 };

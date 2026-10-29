@@ -25,6 +25,9 @@ namespace
 		"?FindObjectsInRadius@ILevel@@QEAA_NPEAV?$vector@PEAVIControlObject@@@ttl@@AEBVvec3@@MPEBVCRTTI@@_NPEAH@Z";
 	constexpr char kGetBonePositionName[] = "?GetBoneJointPos@IModelObject@@QEBA?AVvec3@@E@Z";
 	constexpr char kResolveBoneName[] = "?GetMeshElemFromBoneID@IModelObject@@QEBAHE@Z";
+	constexpr char kCameraMatrixName[] = "?GetCombinedMatrix@IBaseCamera@@QEAAAEBVmtx44@@XZ";
+	constexpr char kElementOrBoneIdName[] =
+		"?GetElementOrBoneElementID@IModelObject@@QEBAHPEBD@Z";
 
 	template <typename Function>
 	Function ResolveExport(HMODULE module, const char *name) noexcept
@@ -174,6 +177,64 @@ bool EngineEntityBindings::IsDerivedFrom(
 	return false;
 }
 
+bool EngineEntityBindings::ReadTypeName(
+	const void *object,
+	char *buffer,
+	std::size_t capacity) noexcept
+{
+	if (buffer == nullptr || capacity == 0)
+		return false;
+	buffer[0] = '\0';
+	if (object == nullptr)
+		return false;
+	__try
+	{
+		const auto *vtable = *reinterpret_cast<void *const *const *>(object);
+		if (vtable == nullptr || vtable[-1] == nullptr)
+			return false;
+		const auto *locator = static_cast<const RttiCompleteObjectLocator *>(vtable[-1]);
+		if (locator->signature != 1 || locator->selfRva <= 0 ||
+			locator->classDescriptorRva <= 0)
+		{
+			return false;
+		}
+		const auto imageBase = reinterpret_cast<std::uintptr_t>(locator) -
+							   static_cast<std::uint32_t>(locator->selfRva);
+		std::uint32_t imageSize = 0;
+		if (!ReadImageSize(reinterpret_cast<HMODULE>(imageBase), imageSize))
+			return false;
+		const auto hierarchyRva = static_cast<std::uint32_t>(locator->classDescriptorRva);
+		if (hierarchyRva > imageSize || imageSize - hierarchyRva < 16)
+			return false;
+		const auto *hierarchy = reinterpret_cast<const std::uint32_t *>(imageBase + hierarchyRva);
+		const std::uint32_t count = hierarchy[2];
+		const std::uint32_t arrayRva = hierarchy[3];
+		if (count == 0 || arrayRva >= imageSize ||
+			count > (imageSize - arrayRva) / sizeof(std::uint32_t))
+		{
+			return false;
+		}
+		const auto *bases = reinterpret_cast<const std::uint32_t *>(imageBase + arrayRva);
+		const std::uint32_t descriptorRva = bases[0];
+		if (descriptorRva >= imageSize || imageSize - descriptorRva < 17)
+			return false;
+		const char *name = reinterpret_cast<const char *>(imageBase + descriptorRva + 16);
+		for (std::size_t index = 0; index + 1 < capacity; ++index)
+		{
+			buffer[index] = name[index];
+			if (buffer[index] == '\0')
+				return true;
+		}
+		buffer[capacity - 1] = '\0';
+		return true;
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		buffer[0] = '\0';
+		return false;
+	}
+}
+
 const EngineEntityBindings *EngineEntityBindings::Resolve() noexcept
 {
 	static EngineEntityBindings bindings;
@@ -207,6 +268,9 @@ const EngineEntityBindings *EngineEntityBindings::Resolve() noexcept
 	bindings.findObjects = ResolveExport<FindObjectsFunction>(engine, kFindObjectsName);
 	bindings.getBonePosition = ResolveExport<BonePositionFunction>(engine, kGetBonePositionName);
 	bindings.resolveBone = ResolveExport<ResolveBoneFunction>(engine, kResolveBoneName);
+	bindings.getCameraMatrix = ResolveExport<CameraMatrixFunction>(engine, kCameraMatrixName);
+	bindings.getElementOrBoneElementId = ResolveExport<ElementOrBoneIdFunction>(
+		engine, kElementOrBoneIdName);
 
 	const bool coreResolved = bindings.getPosition != nullptr &&
 							  bindings.getForward != nullptr && bindings.getUp != nullptr &&

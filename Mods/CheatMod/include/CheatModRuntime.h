@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CheatModBulletTracking.h"
 #include "CheatModInput.h"
 #include "CheatModUi.h"
 
@@ -32,6 +33,7 @@ namespace cheat_mod {
 
 		CheatModUi ui_;
 		CheatModInput input_;
+		CheatModBulletTracking bulletTracking_;
 		void* hostContext_ = nullptr;
 		EngineLogCallback hostLog_ = nullptr;
 		bool initialized_ = false;

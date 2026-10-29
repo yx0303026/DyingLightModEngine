@@ -7,6 +7,8 @@
 #include "runtime/EngineLobbyRuntime.h"
 #include "runtime/EngineGraphicsRuntime.h"
 #include "runtime/EngineHookRuntime.h"
+#include "runtime/EngineCameraRuntime.h"
+#include "runtime/EngineProjectileManager.h"
 #include "logging/EngineLogger.h"
 #include "managers/EngineModManager.h"
 
@@ -45,7 +47,9 @@ bool InitializeModEngine(HMODULE engineModule) noexcept
 		EngineCollisionRuntime::GetApi(),
 		EngineEntityRuntime::GetApi(),
 		EngineHookRuntime::GetApi(),
-		EngineLobbyRuntime::GetApi()
+		EngineLobbyRuntime::GetApi(),
+		EngineProjectileManager::GetApi(),
+		EngineCameraRuntime::GetApi()
 	};
 	if (engineApi.initialize(&hostApi) != DLMOD_RESULT_SUCCESS) {
 		OutputDebugStringA("[DyingLightModEngine] Engine initialization failed\n");
@@ -97,6 +101,7 @@ bool ShutdownModEngine() noexcept
 
 	const DlModResult shutdownResult = engineApi.shutdown();
 	if (shutdownResult == DLMOD_RESULT_SUCCESS) {
+		EngineProjectileManager::Shutdown();
 		EngineEntityRuntime::Shutdown();
 	}
 	return shutdownResult == DLMOD_RESULT_SUCCESS;

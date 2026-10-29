@@ -2,7 +2,18 @@
 
 `CheatMod` is a loadable Dying Light Mod Engine module that builds its menu
 with `DyingLightModEngine::ImGui`. The menu has a vertical navigation sidebar
-and a page content area containing Dashboard, Player, Room List, Room Members, and Settings pages.
+and a page content area containing Dashboard, Player, Bullet Tracking, Room List,
+Room Members, and Settings pages.
+
+The Bullet Tracking page implements projectile guidance entirely inside the
+module: it registers a frame callback and a projectile update callback through
+`DlModProjectileManagerApiV1`, locks the entity closest to the crosshair with
+`DlModEntityApiV1::enumerateNearby` / `readBoneByName`, projects bone points with
+`DlModCameraApiV1::project`, and rewrites the BulletManager velocity before the
+native update runs. Arrow, bolt and bullet records are classified by the engine
+from their visual RTTI, so bows, crossbows, guns and tracers share one path.
+Tracking only runs while a single-player session is active; the engine never
+changes projectile state on its own.
 
 The Room List page shows room discovery results, while Room Members owns the
 current-member and history views plus clipboard/history actions. Both pages

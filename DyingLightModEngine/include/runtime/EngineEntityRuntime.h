@@ -7,6 +7,20 @@ class EngineEntityRuntime final
 public:
 	static const DlModEntityApiV1 *GetApi() noexcept;
 	static void Shutdown() noexcept;
+	/* 内部使用：返回缓存的本地实体实例，必须在游戏线程调用。 */
+	static void *LocalEntityInstance() noexcept;
+	/* 内部使用：读取实体生命值，必须在游戏线程调用。 */
+	static bool ReadEntityHealth(const void *entity, float &bodyHealth) noexcept;
+	static DlModResult MODSDK_CALL EnumerateNearby(
+		const DlModVector3V1 *center,
+		float radius,
+		DlModNearbyEntityV1 *entities,
+		uint32_t capacity,
+		uint32_t *count) noexcept;
+	static DlModResult MODSDK_CALL ReadBoneByName(
+		const DlModEntityV1 *entity,
+		const char *name,
+		DlModVector3V1 *position) noexcept;
 
 private:
 	static DlModResult MODSDK_CALL GetLocalEntity(DlModEntityV1 *entity) noexcept;

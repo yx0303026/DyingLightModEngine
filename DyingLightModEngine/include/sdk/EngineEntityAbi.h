@@ -23,7 +23,8 @@ extern "C"
 		DLMOD_ENTITY_KIND_ENTITY = 1,
 		DLMOD_ENTITY_KIND_PLAYER = 2,
 		DLMOD_ENTITY_KIND_HUMAN = 3,
-		DLMOD_ENTITY_KIND_HUNTER = 4
+		DLMOD_ENTITY_KIND_HUNTER = 4,
+		DLMOD_ENTITY_KIND_ZOMBIE = 5
 	} DlModEntityKindV1;
 
 	typedef struct DlModHunterMotionV1
@@ -109,6 +110,21 @@ extern "C"
 #define DLMOD_HUMAN_SNAPSHOT_V1_BASE_SIZE ((uint32_t)sizeof(DlModHumanSnapshotV1))
 #define DLMOD_HUNTER_SNAPSHOT_V1_BASE_SIZE ((uint32_t)sizeof(DlModHunterSnapshotV1))
 
+	/* 附近实体快照：kind 使用 DLMOD_ENTITY_KIND_*，position 由 validFields 标记。 */
+	typedef struct DlModNearbyEntityV1
+	{
+		uint32_t structSize;
+		uint32_t kind;
+		uint32_t validFields;
+		uint32_t reserved;
+		uint64_t identity;
+		DlModVector3V1 position;
+		DlModEntityV1 entity;
+	} DlModNearbyEntityV1;
+
+#define DLMOD_NEARBY_ENTITY_V1_BASE_SIZE \
+	((uint32_t)offsetof(DlModNearbyEntityV1, entity))
+
 	/* 本地实体查询、读取和写入应在游戏线程调用；猎手运动快照允许跨线程读取。 */
 	typedef DlModResult(MODSDK_CALL *ModEngineGetLocalEntityFn)(DlModEntityV1 *entity);
 	typedef DlModResult(MODSDK_CALL *ModEngineGetLocalPlayerFn)(DlModPlayerV1 *player);
@@ -142,6 +158,18 @@ extern "C"
 		DlModHunterMotionV1 *motion);
 	typedef DlModResult(MODSDK_CALL *ModEngineInstallHunterTrackingFn)(void);
 	typedef uint8_t(MODSDK_CALL *ModEngineIsHunterTrackingInstalledFn)(void);
+	/* 枚举以 center 为球心、radius 为半径的活动实体；entities 指向调用方存储区。 */
+	typedef DlModResult(MODSDK_CALL *ModEngineEnumerateNearbyFn)(
+		const DlModVector3V1 *center,
+		float radius,
+		DlModNearbyEntityV1 *entities,
+		uint32_t capacity,
+		uint32_t *count);
+	/* 按骨骼名读取世界坐标，适用于任意拥有 CModelObject 的实体。 */
+	typedef DlModResult(MODSDK_CALL *ModEngineReadBoneByNameFn)(
+		const DlModEntityV1 *entity,
+		const char *name,
+		DlModVector3V1 *position);
 
 	typedef struct DlModEntityApiV1
 	{
@@ -161,12 +189,18 @@ extern "C"
 		ModEngineReadHunterMotionFn readHunterMotion;
 		ModEngineInstallHunterTrackingFn installHunterTracking;
 		ModEngineIsHunterTrackingInstalledFn isHunterTrackingInstalled;
+		ModEngineEnumerateNearbyFn enumerateNearby;
+		ModEngineReadBoneByNameFn readBoneByName;
 	} DlModEntityApiV1;
 
 #define DLMOD_ENTITY_API_V1_MIN_SIZE \
 	((uint32_t)(offsetof(DlModEntityApiV1, getLocalEntity) + sizeof(ModEngineGetLocalEntityFn)))
 #define DLMOD_ENTITY_API_V1_HUNTER_SIZE \
 	((uint32_t)(offsetof(DlModEntityApiV1, isHunterTrackingInstalled) + sizeof(ModEngineIsHunterTrackingInstalledFn)))
+#define DLMOD_ENTITY_API_V1_NEARBY_SIZE \
+	((uint32_t)(offsetof(DlModEntityApiV1, enumerateNearby) + sizeof(ModEngineEnumerateNearbyFn)))
+#define DLMOD_ENTITY_API_V1_BONE_NAME_SIZE \
+	((uint32_t)(offsetof(DlModEntityApiV1, readBoneByName) + sizeof(ModEngineReadBoneByNameFn)))
 
 #ifdef __cplusplus
 }
