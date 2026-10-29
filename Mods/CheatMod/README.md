@@ -2,9 +2,11 @@
 
 `CheatMod` is a loadable Dying Light Mod Engine module that builds its menu
 with `DyingLightModEngine::ImGui`. The menu has a vertical navigation sidebar
-and a page content area containing Dashboard, Player, Room List, and Settings pages.
+and a page content area containing Dashboard, Player, Room List, Room Members, and Settings pages.
 
-The Room List page consumes the Engine Lobby snapshot API. Lobby discovery and
+The Room List page shows room discovery results, while Room Members owns the
+current-member and history views plus clipboard/history actions. Both pages
+consume the Engine Lobby snapshot API. Lobby discovery and
 EOS data collection stay inside the Engine runtime; the mod only receives a
 stable, copied snapshot through `DlModLobbyApiV1` and renders it with the Engine
 ImGui facade.

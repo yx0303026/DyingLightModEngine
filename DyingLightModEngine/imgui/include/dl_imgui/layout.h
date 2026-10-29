@@ -78,17 +78,25 @@ namespace dl::imgui {
 	public:
 		using SelectionChanged = std::function<void(int, const std::string&)>;
 
+		explicit ListView(ImVec2 size = ImVec2(0.0F, 0.0F), std::string emptyText = "暂无项目");
+
 		void SetItems(std::vector<std::string> items);
 		const std::vector<std::string>& GetItems() const noexcept;
 		int GetSelectedIndex() const noexcept;
 		void SetSelectedIndex(int index);
 		void SetOnSelectionChanged(SelectionChanged callback);
+		ImVec2 GetSize() const noexcept;
+		void SetSize(ImVec2 size) noexcept;
+		const std::string& GetEmptyText() const noexcept;
+		void SetEmptyText(std::string text);
 
 	protected:
 		void OnRender() override;
 
 	private:
+		ImVec2 size_{};
 		std::vector<std::string> items_;
+		std::string emptyText_;
 		int selectedIndex_ = -1;
 		SelectionChanged selectionChanged_;
 	};

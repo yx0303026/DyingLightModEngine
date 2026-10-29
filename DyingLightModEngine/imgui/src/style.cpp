@@ -59,6 +59,7 @@ namespace dl::imgui {
 			style.ScrollbarSize = 10.0F;
 			style.GrabMinSize = 10.0F;
 			style.WindowBorderSize = 1.0F;
+			style.WindowBorderHoverPadding = 4.0F;
 			style.ChildBorderSize = 0.0F;
 			style.PopupBorderSize = 1.0F;
 			style.FrameBorderSize = 0.0F;

@@ -221,6 +221,8 @@ namespace dl::imgui {
 			ImGui::SetCurrentContext(context_);
 			detail::LoadDefaultChineseFont();
 			ApplyDefaultStyle();
+			baseStyle_ = ImGui::GetStyle();
+			baseStyle_.WindowBorderHoverPadding = std::max(1.0F, baseStyle_.WindowBorderHoverPadding);
 		}
 		return context_ != nullptr;
 	}
@@ -301,15 +303,26 @@ namespace dl::imgui {
 		mouseProviderActive_ = true;
 	}
 
+	void UiContext::ApplyScale() noexcept
+	{
+		if (context_ == nullptr || scale_ == appliedScale_) {
+			return;
+		}
+
+		ImGuiStyle scaledStyle = baseStyle_;
+		scaledStyle.ScaleAllSizes(scale_);
+		/* ImGui 要求边框悬停判定范围始终大于零，低缩放比例下截断结果必须兜底。 */
+		scaledStyle.WindowBorderHoverPadding = std::max(1.0F, scaledStyle.WindowBorderHoverPadding);
+		ImGui::GetStyle() = scaledStyle;
+		ImGui::GetIO().FontGlobalScale = scale_;
+		appliedScale_ = scale_;
+	}
+
 	void UiContext::BeginFrame()
 	{
 		if (context_ != nullptr) {
 			ImGui::SetCurrentContext(context_);
-			if (scale_ != appliedScale_) {
-				ImGui::GetStyle().ScaleAllSizes(scale_ / appliedScale_);
-				ImGui::GetIO().FontGlobalScale = scale_;
-				appliedScale_ = scale_;
-			}
+			ApplyScale();
 			ApplyMouseState();
 			ImGui::NewFrame();
 		}

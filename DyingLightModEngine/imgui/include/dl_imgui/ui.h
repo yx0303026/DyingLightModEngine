@@ -138,12 +138,14 @@ namespace dl::imgui {
 
 	private:
 		void ApplyMouseState() noexcept;
+		void ApplyScale() noexcept;
 
 		ImGuiContext* context_ = nullptr;
 		ModEngineGetUiMouseStateFn mouseStateProvider_ = nullptr;
 		bool mouseProviderActive_ = false;
 		float scale_ = 1.0F;
 		float appliedScale_ = 1.0F;
+		ImGuiStyle baseStyle_{};
 	};
 
 } // namespace dl::imgui

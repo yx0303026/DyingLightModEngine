@@ -15,6 +15,11 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
 
 namespace cheat_mod {
 
+	CheatModUi::CheatModUi()
+		: lobbyView_(lobby_)
+	{
+	}
+
 	bool CheatModUi::Initialize()
 	{
 		if (navigation_ != nullptr || !context_.Create()) {
@@ -49,14 +54,14 @@ namespace cheat_mod {
 			return;
 		}
 		lobby_.Refresh();
-		RefreshLobbyLabels();
+		lobbyView_.Refresh();
 		bool open = open_.load();
 		ImGui_ImplDX11_NewFrame();
 		ImGui_ImplWin32_NewFrame();
 		context_.BeginFrame();
 		engineMouse_.store(open && context_.IsMouseProviderActive());
 		if (open) {
-			ImGui::SetNextWindowSize(dl::imgui::ScaleSize(ImVec2(760.0F, 520.0F)), ImGuiCond_FirstUseEver);
+			ImGui::SetNextWindowSize(dl::imgui::ScaleSize(ImVec2(980.0F, 640.0F)), ImGuiCond_FirstUseEver);
 			if (ImGui::Begin("Cheat Mod", &open, ImGuiWindowFlags_NoCollapse)) {
 				context_.Render(*navigation_);
 			}
@@ -144,14 +149,17 @@ namespace cheat_mod {
 		dl::imgui::Page& dashboard = navigation_->AddPage("dashboard", "Dashboard");
 		dl::imgui::Page& player = navigation_->AddPage("player", "Player");
 		dl::imgui::Page& roomList = navigation_->AddPage("room-list", "Room List");
+		dl::imgui::Page& roomMembers = navigation_->AddPage("room-members", "Room Members");
 		dl::imgui::Page& settings = navigation_->AddPage("settings", "Settings");
 		navigation_->GetNavigationBar().SetItemIcon("dashboard", dl::imgui::NavigationIcon::Home);
 		navigation_->GetNavigationBar().SetItemIcon("player", dl::imgui::NavigationIcon::Person);
 		navigation_->GetNavigationBar().SetItemIcon("room-list", dl::imgui::NavigationIcon::Game);
+		navigation_->GetNavigationBar().SetItemIcon("room-members", dl::imgui::NavigationIcon::Person);
 		navigation_->GetNavigationBar().SetItemIcon("settings", dl::imgui::NavigationIcon::Settings);
 		BuildDashboardPage(dashboard);
 		BuildPlayerPage(player);
-		BuildRoomListPage(roomList);
+		lobbyView_.BuildRoomListPage(roomList);
+		lobbyView_.BuildMembersPage(roomMembers);
 		BuildSettingsPage(settings);
 	}
 
@@ -173,23 +181,6 @@ namespace cheat_mod {
 		page.AddChild<dl::imgui::Label>("Player controls are kept in this page so new features can be added independently.");
 	}
 
-	void CheatModUi::BuildRoomListPage(dl::imgui::Page& page)
-	{
-		page.AddChild<dl::imgui::Label>("Room members and search results");
-		lobbyStatusLabel_ = &page.AddChild<dl::imgui::Label>(lobby_.GetStatusText());
-		page.AddChild<dl::imgui::Separator>();
-		dl::imgui::ScrollView& currentScroll = page.AddChild<dl::imgui::ScrollView>(ImVec2(0.0F, 220.0F), true);
-		lobbyCurrentLabel_ = &currentScroll.AddChild<dl::imgui::Label>("Current members: ");
-		dl::imgui::ScrollView& historyScroll = page.AddChild<dl::imgui::ScrollView>(ImVec2(0.0F, 180.0F), true);
-		lobbyHistoryLabel_ = &historyScroll.AddChild<dl::imgui::Label>("History members: ");
-		dl::imgui::ScrollView& roomsScroll = page.AddChild<dl::imgui::ScrollView>(ImVec2(0.0F, 180.0F), true);
-		lobbyRoomsLabel_ = &roomsScroll.AddChild<dl::imgui::Label>("Search results: ");
-		dl::imgui::Button& clearHistory = page.AddChild<dl::imgui::Button>("Clear history");
-		clearHistory.SetOnClick(std::bind(&CheatModUi::OnClearLobbyHistory, this));
-		dl::imgui::Button& copyMembers = page.AddChild<dl::imgui::Button>("Copy current members");
-		copyMembers.SetOnClick(std::bind(&CheatModUi::OnCopyLobbyMembers, this));
-	}
-
 	void CheatModUi::BuildSettingsPage(dl::imgui::Page& page)
 	{
 		page.AddChild<dl::imgui::Label>("Settings");
@@ -208,32 +199,10 @@ namespace cheat_mod {
 		infiniteStaminaEnabled_ = enabled;
 	}
 
-	void CheatModUi::OnClearLobbyHistory() noexcept
-	{
-		lobby_.ClearHistory();
-	}
-
-	void CheatModUi::OnCopyLobbyMembers() noexcept
-	{
-		lobby_.CopyCurrentToClipboard();
-	}
-
 	void CheatModUi::OnUiScaleChanged(float scale) noexcept
 	{
 		uiScale_ = scale;
 		context_.SetScale(scale);
-	}
-
-	void CheatModUi::RefreshLobbyLabels() noexcept
-	{
-		if (lobbyStatusLabel_ != nullptr)
-			lobbyStatusLabel_->SetText(lobby_.GetStatusText());
-		if (lobbyCurrentLabel_ != nullptr)
-			lobbyCurrentLabel_->SetText(std::string("Current members: ") + lobby_.GetCurrentText());
-		if (lobbyHistoryLabel_ != nullptr)
-			lobbyHistoryLabel_->SetText(std::string("History members: ") + lobby_.GetHistoryText());
-		if (lobbyRoomsLabel_ != nullptr)
-			lobbyRoomsLabel_->SetText(std::string("Search results: ") + lobby_.GetRoomsText());
 	}
 
 	bool CheatModUi::InitializeGraphics(void* graphicsContext) noexcept

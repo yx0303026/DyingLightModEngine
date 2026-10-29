@@ -3,6 +3,7 @@
 #include "dl_imgui/imgui.h"
 
 #include "CheatModLobby.h"
+#include "CheatModLobbyView.h"
 
 #include "sdk/EngineLobbyAbi.h"
 #include "sdk/EngineUiInputAbi.h"
@@ -19,7 +20,7 @@ namespace cheat_mod {
 
 	class CheatModUi final {
 	public:
-		CheatModUi() = default;
+		CheatModUi();
 		~CheatModUi() = default;
 		CheatModUi(const CheatModUi&) = delete;
 		CheatModUi& operator=(const CheatModUi&) = delete;
@@ -42,13 +43,9 @@ namespace cheat_mod {
 		void BuildNavigation();
 		void BuildDashboardPage(dl::imgui::Page& page);
 		void BuildPlayerPage(dl::imgui::Page& page);
-		void BuildRoomListPage(dl::imgui::Page& page);
 		void BuildSettingsPage(dl::imgui::Page& page);
-		void RefreshLobbyLabels() noexcept;
 		void OnGodModeChanged(bool enabled) noexcept;
 		void OnInfiniteStaminaChanged(bool enabled) noexcept;
-		void OnClearLobbyHistory() noexcept;
-		void OnCopyLobbyMembers() noexcept;
 		void OnUiScaleChanged(float scale) noexcept;
 		bool InitializeGraphics(void* graphicsContext) noexcept;
 		void ShutdownGraphics() noexcept;
@@ -58,10 +55,7 @@ namespace cheat_mod {
 		dl::imgui::UiContext context_;
 		std::unique_ptr<dl::imgui::NavigationView> navigation_;
 		CheatModLobby lobby_;
-		dl::imgui::Label* lobbyStatusLabel_ = nullptr;
-		dl::imgui::Label* lobbyCurrentLabel_ = nullptr;
-		dl::imgui::Label* lobbyHistoryLabel_ = nullptr;
-		dl::imgui::Label* lobbyRoomsLabel_ = nullptr;
+		CheatModLobbyView lobbyView_;
 		IDXGISwapChain* swapChain_ = nullptr;
 		ID3D11Device* device_ = nullptr;
 		ID3D11DeviceContext* deviceContext_ = nullptr;

@@ -151,6 +151,12 @@ namespace dl::imgui {
 		ImGui::EndChild();
 	}
 
+	ListView::ListView(ImVec2 size, std::string emptyText)
+		: size_(size)
+		, emptyText_(std::move(emptyText))
+	{
+	}
+
 	void ListView::SetItems(std::vector<std::string> items)
 	{
 		items_ = std::move(items);
@@ -186,14 +192,59 @@ namespace dl::imgui {
 		selectionChanged_ = std::move(callback);
 	}
 
+	ImVec2 ListView::GetSize() const noexcept
+	{
+		return size_;
+	}
+
+	void ListView::SetSize(ImVec2 size) noexcept
+	{
+		size_ = size;
+	}
+
+	const std::string& ListView::GetEmptyText() const noexcept
+	{
+		return emptyText_;
+	}
+
+	void ListView::SetEmptyText(std::string text)
+	{
+		emptyText_ = std::move(text);
+	}
+
 	void ListView::OnRender()
 	{
-		for (int index = 0; index < static_cast<int>(items_.size()); ++index) {
-			const bool selected = selectedIndex_ == index;
-			if (ImGui::Selectable(items_[index].c_str(), selected)) {
-				SetSelectedIndex(index);
+		const ImVec2 size = ResolveSize(size_);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(ScaleSize(8.0F), ScaleSize(6.0F)));
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(ScaleSize(9.0F), ScaleSize(7.0F)));
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0F, ScaleSize(3.0F)));
+		if (!ImGui::BeginChild("##list_view", size, true)) {
+			ImGui::EndChild();
+			ImGui::PopStyleVar(3);
+			return;
+		}
+
+		if (items_.empty()) {
+			ImGui::Dummy(ImVec2(0.0F, ScaleSize(5.0F)));
+			ImGui::TextDisabled("%s", emptyText_.c_str());
+		} else {
+			ImGuiListClipper clipper;
+			clipper.Begin(static_cast<int>(items_.size()));
+			while (clipper.Step()) {
+				for (int index = clipper.DisplayStart; index < clipper.DisplayEnd; ++index) {
+					ImGui::PushID(index);
+					const bool selected = selectedIndex_ == index;
+					const ImVec2 rowSize(std::max(0.0F, ImGui::GetContentRegionAvail().x), 0.0F);
+					if (ImGui::Selectable(items_[index].c_str(), selected, ImGuiSelectableFlags_None, rowSize)) {
+						SetSelectedIndex(index);
+					}
+					ImGui::PopID();
+				}
 			}
 		}
+
+		ImGui::EndChild();
+		ImGui::PopStyleVar(3);
 	}
 
 } // namespace dl::imgui
