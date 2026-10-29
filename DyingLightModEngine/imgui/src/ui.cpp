@@ -1,4 +1,5 @@
 #include "dl_imgui/ui.h"
+#include "dl_imgui/font.h"
 #include "dl_imgui/style.h"
 
 #include <algorithm>
@@ -218,6 +219,7 @@ namespace dl::imgui {
 		context_ = ImGui::CreateContext();
 		if (context_ != nullptr) {
 			ImGui::SetCurrentContext(context_);
+			detail::LoadDefaultChineseFont();
 			ApplyDefaultStyle();
 		}
 		return context_ != nullptr;

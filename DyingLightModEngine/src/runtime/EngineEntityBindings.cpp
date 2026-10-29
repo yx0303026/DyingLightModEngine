@@ -26,22 +26,22 @@ namespace
 	constexpr char kGetBonePositionName[] = "?GetBoneJointPos@IModelObject@@QEBA?AVvec3@@E@Z";
 	constexpr char kResolveBoneName[] = "?GetMeshElemFromBoneID@IModelObject@@QEBAHE@Z";
 
-	template<typename Function>
-	Function ResolveExport(HMODULE module, const char* name) noexcept
+	template <typename Function>
+	Function ResolveExport(HMODULE module, const char *name) noexcept
 	{
 		return module == nullptr
-			? nullptr
-			: reinterpret_cast<Function>(GetProcAddress(module, name));
+				   ? nullptr
+				   : reinterpret_cast<Function>(GetProcAddress(module, name));
 	}
 
-	template<typename Function>
+	template <typename Function>
 	Function ResolveImport(HMODULE module, std::uintptr_t rva) noexcept
 	{
 		if (module == nullptr)
 			return nullptr;
 		__try
 		{
-			return *reinterpret_cast<Function*>(
+			return *reinterpret_cast<Function *>(
 				reinterpret_cast<std::uintptr_t>(module) + rva);
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER)
@@ -50,7 +50,7 @@ namespace
 		}
 	}
 
-	bool ReadImageSize(HMODULE module, std::uint32_t& imageSize) noexcept
+	bool ReadImageSize(HMODULE module, std::uint32_t &imageSize) noexcept
 	{
 		imageSize = 0;
 		if (module == nullptr)
@@ -59,14 +59,14 @@ namespace
 		}
 		__try
 		{
-			const auto* base = reinterpret_cast<const std::uint8_t*>(module);
-			const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+			const auto *base = reinterpret_cast<const std::uint8_t *>(module);
+			const auto *dos = reinterpret_cast<const IMAGE_DOS_HEADER *>(base);
 			if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0 ||
 				dos->e_lfanew > 1 << 20)
 			{
 				return false;
 			}
-			const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(base + dos->e_lfanew);
+			const auto *nt = reinterpret_cast<const IMAGE_NT_HEADERS64 *>(base + dos->e_lfanew);
 			if (nt->Signature != IMAGE_NT_SIGNATURE ||
 				nt->FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64 ||
 				nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC)
@@ -116,7 +116,7 @@ bool EngineEntityBindings::IsSupportedEngine(HMODULE module) noexcept
 }
 
 bool EngineEntityBindings::IsDerivedFrom(
-	const void* object,
+	const void *object,
 	std::string_view className) noexcept
 {
 	if (object == nullptr || className.empty() || className.size() >= 256)
@@ -125,24 +125,24 @@ bool EngineEntityBindings::IsDerivedFrom(
 	}
 	__try
 	{
-		const auto* vtable = *reinterpret_cast<void* const* const*>(object);
+		const auto *vtable = *reinterpret_cast<void *const *const *>(object);
 		if (vtable == nullptr || vtable[-1] == nullptr)
 			return false;
-		const auto* locator = static_cast<const RttiCompleteObjectLocator*>(vtable[-1]);
+		const auto *locator = static_cast<const RttiCompleteObjectLocator *>(vtable[-1]);
 		if (locator->signature != 1 || locator->selfRva <= 0 ||
 			locator->classDescriptorRva <= 0)
 		{
 			return false;
 		}
 		const auto imageBase = reinterpret_cast<std::uintptr_t>(locator) -
-			static_cast<std::uint32_t>(locator->selfRva);
+							   static_cast<std::uint32_t>(locator->selfRva);
 		std::uint32_t imageSize = 0;
 		if (!ReadImageSize(reinterpret_cast<HMODULE>(imageBase), imageSize))
 			return false;
 		const auto hierarchyRva = static_cast<std::uint32_t>(locator->classDescriptorRva);
 		if (hierarchyRva > imageSize || imageSize - hierarchyRva < 16)
 			return false;
-		const auto* hierarchy = reinterpret_cast<const std::uint32_t*>(imageBase + hierarchyRva);
+		const auto *hierarchy = reinterpret_cast<const std::uint32_t *>(imageBase + hierarchyRva);
 		const std::uint32_t count = hierarchy[2];
 		const std::uint32_t arrayRva = hierarchy[3];
 		if (count == 0 || count > 256 || arrayRva >= imageSize ||
@@ -150,14 +150,14 @@ bool EngineEntityBindings::IsDerivedFrom(
 		{
 			return false;
 		}
-		const auto* bases = reinterpret_cast<const std::uint32_t*>(imageBase + arrayRva);
+		const auto *bases = reinterpret_cast<const std::uint32_t *>(imageBase + arrayRva);
 		for (std::uint32_t index = 0; index < count; ++index)
 		{
 			const std::uint32_t descriptorRva = bases[index];
 			if (descriptorRva >= imageSize ||
 				imageSize - descriptorRva < className.size() + 21)
 				return false;
-			const char* name = reinterpret_cast<const char*>(imageBase + descriptorRva + 16);
+			const char *name = reinterpret_cast<const char *>(imageBase + descriptorRva + 16);
 			if (name[0] == '.' && name[1] == '?' && name[2] == 'A' &&
 				(name[3] == 'V' || name[3] == 'U') &&
 				std::strncmp(name + 4, className.data(), className.size()) == 0 &&
@@ -174,7 +174,7 @@ bool EngineEntityBindings::IsDerivedFrom(
 	return false;
 }
 
-const EngineEntityBindings* EngineEntityBindings::Resolve() noexcept
+const EngineEntityBindings *EngineEntityBindings::Resolve() noexcept
 {
 	static EngineEntityBindings bindings;
 	static std::atomic_bool resolved = false;
@@ -209,13 +209,13 @@ const EngineEntityBindings* EngineEntityBindings::Resolve() noexcept
 	bindings.resolveBone = ResolveExport<ResolveBoneFunction>(engine, kResolveBoneName);
 
 	const bool coreResolved = bindings.getPosition != nullptr &&
-		bindings.getForward != nullptr && bindings.getUp != nullptr &&
-		bindings.setPosition != nullptr && bindings.setOrientation != nullptr &&
-		bindings.getLevel != nullptr && bindings.getActiveLevel != nullptr &&
-		bindings.getActiveCamera != nullptr &&
-		bindings.getCameraPosition != nullptr &&
-		bindings.getLocalId != nullptr && bindings.getObjectId != nullptr &&
-		bindings.findObjects != nullptr;
+							  bindings.getForward != nullptr && bindings.getUp != nullptr &&
+							  bindings.setPosition != nullptr && bindings.setOrientation != nullptr &&
+							  bindings.getLevel != nullptr && bindings.getActiveLevel != nullptr &&
+							  bindings.getActiveCamera != nullptr &&
+							  bindings.getCameraPosition != nullptr &&
+							  bindings.getLocalId != nullptr && bindings.getObjectId != nullptr &&
+							  bindings.findObjects != nullptr;
 	if (!coreResolved)
 		return nullptr;
 	resolved.store(true, std::memory_order_release);

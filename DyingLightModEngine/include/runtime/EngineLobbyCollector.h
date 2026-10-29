@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <mutex>
 #include <thread>
@@ -30,7 +31,9 @@ public:
 	using GetLobbyInterfaceFunction = void*(*)(void*);
 	using GetConnectInterfaceFunction = void*(*)(void*);
 	using LoggedInUserFunction = const void*(*)(void*, std::int32_t);
+	using GetMemberByIndexFunction = const void*(*)(void*, std::int32_t);
 	using CopyDetailsFunction = std::int32_t(*)(void*, const void*, void**);
+	using DetailsReleaseFunction = void(*)(void*);
 	using CopySearchResultFunction = std::int32_t(*)(void*, const void*, void**);
 
 	struct Api final
@@ -50,7 +53,9 @@ public:
 		GetLobbyInterfaceFunction getLobbyInterface = nullptr;
 		GetConnectInterfaceFunction getConnectInterface = nullptr;
 		LoggedInUserFunction loggedInUser = nullptr;
+		GetMemberByIndexFunction getMemberByIndex = nullptr;
 		CopySearchResultFunction copySearchResult = nullptr;
+		DetailsReleaseFunction releaseDetails = nullptr;
 	};
 
 private:
@@ -66,6 +71,12 @@ private:
 	bool InstallHooks() noexcept;
 	void RemoveHooks() noexcept;
 	void EnsureDetails() noexcept;
+	void UpdateLobbyTarget(
+		void* lobbyInterface,
+		const char* lobbyId,
+		const void* localProductUserId,
+		bool onlyIfUnset) noexcept;
+	void SetStatusIfCurrent(std::uint64_t generation, std::uint32_t status) noexcept;
 
 	static std::int32_t HookCopyDetails(void* lobbyInterface, const void* options, void** output) noexcept;
 	static std::int32_t HookJoinLobby(
@@ -83,9 +94,13 @@ private:
 	void* connectionInterface_ = nullptr;
 	void* platform_ = nullptr;
 	void* localProductUserId_ = nullptr;
-	LobbyDetailsHandle details_ = nullptr;
+	LobbyDetailsHandle ownedDetails_ = nullptr;
 	char lobbyId_[64]{};
-	bool ownDetailsTried_ = false;
+	char ownedDetailsLobbyId_[64]{};
+	std::uint64_t lobbyGeneration_ = 0;
+	std::uint64_t ownedDetailsGeneration_ = 0;
+	bool ownedDetailsInvalidated_ = false;
+	std::chrono::steady_clock::time_point nextDetailsRetry_{};
 
 	using JoinLobbyFunction = std::int32_t(*)(void*, const void*, void*, void*);
 	using PlatformTickFunction = std::int32_t(*)(void*, const void*);

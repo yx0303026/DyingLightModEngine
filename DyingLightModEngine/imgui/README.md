@@ -34,6 +34,11 @@ dl::imgui::ApplyDefaultStyle();
 Apply the preset before the first frame. Individual controls can still override
 colors, rounding, and spacing through `dl::imgui::Style`.
 
+`UiContext::Create()` loads Microsoft YaHei from the Windows fonts directory
+(`%WINDIR%\Fonts\msyh.ttc`) with full Chinese and Latin glyph coverage. If the
+font is unavailable, Dear ImGui keeps its built-in fallback font. The default
+font size is 18 pixels and follows the context scale.
+
 ## UI Scaling
 
 Each `UiContext` owns an independent proportional scale. Set it before

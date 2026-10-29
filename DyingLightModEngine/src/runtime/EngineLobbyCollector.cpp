@@ -23,21 +23,21 @@ namespace
 	struct CopyDetailsOptions final
 	{
 		std::int32_t api = 1;
-		const char* lobbyId = nullptr;
-		const void* localProductUserId = nullptr;
+		const char *lobbyId = nullptr;
+		const void *localProductUserId = nullptr;
 	};
 
 	struct LobbyAttributeOptions final
 	{
 		std::int32_t api = 1;
-		const char* key = nullptr;
+		const char *key = nullptr;
 	};
 
 	struct MemberAttributeOptions final
 	{
 		std::int32_t api = 1;
-		const void* member = nullptr;
-		const char* key = nullptr;
+		const void *member = nullptr;
+		const char *key = nullptr;
 	};
 
 	struct MemberCountOptions final
@@ -45,22 +45,16 @@ namespace
 		std::int32_t api = 1;
 	};
 
-	struct MemberIndexOptions final
-	{
-		std::int32_t api = 1;
-		std::uint32_t index = 0;
-	};
-
 	struct MemberAttributeCountOptions final
 	{
 		std::int32_t api = 1;
-		const void* member = nullptr;
+		const void *member = nullptr;
 	};
 
 	struct MemberAttributeIndexOptions final
 	{
 		std::int32_t api = 1;
-		const void* member = nullptr;
+		const void *member = nullptr;
 		std::int32_t index = 0;
 	};
 
@@ -68,25 +62,25 @@ namespace
 	{
 		std::int32_t api = 1;
 		std::int32_t accountType = kSteamAccountType;
-		const void* productUserId = nullptr;
+		const void *productUserId = nullptr;
 	};
 
 	struct CopyInfoOptions final
 	{
 		std::int32_t api = 1;
-		void* details = nullptr;
+		void *details = nullptr;
 	};
 
-	template<typename Value>
-	bool ReadField(const void* object, std::uintptr_t offset, Value& value) noexcept
+	template <typename Value>
+	bool ReadField(const void *object, std::uintptr_t offset, Value &value) noexcept
 	{
 		value = {};
 		if (object == nullptr)
 			return false;
 		__try
 		{
-			value = *reinterpret_cast<const Value*>(
-				static_cast<const std::uint8_t*>(object) + offset);
+			value = *reinterpret_cast<const Value *>(
+				static_cast<const std::uint8_t *>(object) + offset);
 			return true;
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER)
@@ -95,7 +89,7 @@ namespace
 		}
 	}
 
-	bool CopyText(const char* value, char* output, std::size_t capacity) noexcept
+	bool CopyText(const char *value, char *output, std::size_t capacity) noexcept
 	{
 		if (output == nullptr || capacity == 0)
 			return false;
@@ -115,22 +109,22 @@ namespace
 		}
 	}
 
-	bool ReadOptionPointer(const void* options, std::uintptr_t offset, void*& value) noexcept
+	bool ReadOptionPointer(const void *options, std::uintptr_t offset, void *&value) noexcept
 	{
 		return ReadField(options, offset, value);
 	}
 
-	bool ReadOptionString(const void* options, std::uintptr_t offset, char* output, std::size_t capacity) noexcept
+	bool ReadOptionString(const void *options, std::uintptr_t offset, char *output, std::size_t capacity) noexcept
 	{
-		const char* value = nullptr;
+		const char *value = nullptr;
 		return ReadField(options, offset, value) && CopyText(value, output, capacity);
 	}
 
 	bool ReadStringAttribute(
-		void* details,
-		const char* key,
-		EngineLobbyCollector::Api* api,
-		char* output,
+		void *details,
+		const char *key,
+		EngineLobbyCollector::Api *api,
+		char *output,
 		std::size_t capacity) noexcept
 	{
 		if (details == nullptr || key == nullptr || api == nullptr ||
@@ -138,14 +132,14 @@ namespace
 			return false;
 		LobbyAttributeOptions options{};
 		options.key = key;
-		void* attribute = nullptr;
+		void *attribute = nullptr;
 		bool result = false;
 		__try
 		{
 			if (api->copyLobbyAttribute(details, &options, &attribute) == kSuccess && attribute != nullptr)
 			{
-				void* data = nullptr;
-				const char* value = nullptr;
+				void *data = nullptr;
+				const char *value = nullptr;
 				std::int32_t type = -1;
 				if (ReadField(attribute, 0x08, data) && ReadField(data, 0x10, value) &&
 					ReadField(data, 0x18, type) && type == 3)
@@ -164,11 +158,11 @@ namespace
 	}
 
 	bool ReadMemberStringAttribute(
-		void* details,
-		const void* member,
-		const char* key,
-		EngineLobbyCollector::Api* api,
-		char* output,
+		void *details,
+		const void *member,
+		const char *key,
+		EngineLobbyCollector::Api *api,
+		char *output,
 		std::size_t capacity) noexcept
 	{
 		if (details == nullptr || member == nullptr || key == nullptr || api == nullptr ||
@@ -177,14 +171,14 @@ namespace
 		MemberAttributeOptions options{};
 		options.member = member;
 		options.key = key;
-		void* attribute = nullptr;
+		void *attribute = nullptr;
 		bool result = false;
 		__try
 		{
 			if (api->copyMemberAttribute(details, &options, &attribute) == kSuccess && attribute != nullptr)
 			{
-				void* data = nullptr;
-				const char* value = nullptr;
+				void *data = nullptr;
+				const char *value = nullptr;
 				std::int32_t type = -1;
 				if (ReadField(attribute, 0x08, data) && ReadField(data, 0x10, value) &&
 					ReadField(data, 0x18, type) && type == 3)
@@ -203,10 +197,10 @@ namespace
 	}
 
 	void FillMemberAttributes(
-		void* details,
-		const void* member,
-		EngineLobbyCollector::Api* api,
-		EngineLobbyMemberRecord& result) noexcept
+		void *details,
+		const void *member,
+		EngineLobbyCollector::Api *api,
+		EngineLobbyMemberRecord &result) noexcept
 	{
 		if (details == nullptr || member == nullptr || api == nullptr ||
 			api->memberAttributeCount == nullptr || api->copyMemberAttributeByIndex == nullptr)
@@ -219,11 +213,11 @@ namespace
 			MemberAttributeIndexOptions options{};
 			options.member = member;
 			options.index = index;
-			void* attribute = nullptr;
+			void *attribute = nullptr;
 			if (api->copyMemberAttributeByIndex(details, &options, &attribute) != kSuccess || attribute == nullptr)
 				continue;
-			void* data = nullptr;
-			const char* value = nullptr;
+			void *data = nullptr;
+			const char *value = nullptr;
 			std::int32_t type = -1;
 			if (ReadField(attribute, 0x08, data) && ReadField(data, 0x10, value) &&
 				ReadField(data, 0x18, type) && type == 3)
@@ -250,12 +244,12 @@ namespace
 			MemberAttributeIndexOptions options{};
 			options.member = member;
 			options.index = index;
-			void* attribute = nullptr;
+			void *attribute = nullptr;
 			if (api->copyMemberAttributeByIndex(details, &options, &attribute) != kSuccess || attribute == nullptr)
 				continue;
-			void* data = nullptr;
+			void *data = nullptr;
 			std::int32_t type = -1;
-			void* value = nullptr;
+			void *value = nullptr;
 			if (ReadField(attribute, 0x08, data) && ReadField(data, 0x18, type) &&
 				ReadField(data, 0x10, value) && (type == 0 || type == 1))
 			{
@@ -277,20 +271,20 @@ namespace
 	}
 
 	bool CopyLobbyId(
-		void* details,
-		EngineLobbyCollector::Api* api,
-		char* output,
+		void *details,
+		EngineLobbyCollector::Api *api,
+		char *output,
 		std::size_t capacity) noexcept
 	{
 		if (details == nullptr || api == nullptr || api->copyInfo == nullptr)
 			return false;
 		CopyInfoOptions options{};
 		options.details = details;
-		void* info = nullptr;
+		void *info = nullptr;
 		bool result = false;
 		if (api->copyInfo(details, &options, &info) == kSuccess && info != nullptr)
 		{
-			const char* lobbyId = nullptr;
+			const char *lobbyId = nullptr;
 			if (ReadField(info, 0x08, lobbyId))
 				result = CopyText(lobbyId, output, capacity);
 		}
@@ -300,10 +294,10 @@ namespace
 	}
 
 	bool PuidToSteam(
-		const void* puid,
-		void* connectionInterface,
-		EngineLobbyCollector::Api* api,
-		char* output,
+		const void *puid,
+		void *connectionInterface,
+		EngineLobbyCollector::Api *api,
+		char *output,
 		std::size_t capacity) noexcept
 	{
 		if (puid == nullptr || connectionInterface == nullptr || api == nullptr ||
@@ -311,11 +305,11 @@ namespace
 			return false;
 		ExternalAccountOptions options{};
 		options.productUserId = puid;
-		void* info = nullptr;
+		void *info = nullptr;
 		bool result = false;
 		if (api->copyExternalAccount(connectionInterface, &options, &info) == kSuccess && info != nullptr)
 		{
-			const char* account = nullptr;
+			const char *account = nullptr;
 			if (ReadField(info, 0x18, account))
 				result = CopyText(account, output, capacity);
 		}
@@ -324,35 +318,11 @@ namespace
 		return result;
 	}
 
-	bool IsValidPointer(const void* value) noexcept
-	{
-		return value != nullptr;
-	}
-
-	void* InvokeMemberGetter(
-		void* slot,
-		void* implementation,
-		const void* options,
-		void** output) noexcept
-	{
-		using GetMemberFunction = void*(*)(void*, const void*, void**);
-		if (slot == nullptr || implementation == nullptr)
-			return nullptr;
-		__try
-		{
-			return reinterpret_cast<GetMemberFunction>(slot)(implementation, options, output);
-		}
-		__except (EXCEPTION_EXECUTE_HANDLER)
-		{
-			return nullptr;
-		}
-	}
-
 	void MergeMember(
-		std::vector<EngineLobbyMemberRecord>& members,
-		const EngineLobbyMemberRecord& source) noexcept
+		std::vector<EngineLobbyMemberRecord> &members,
+		const EngineLobbyMemberRecord &source) noexcept
 	{
-		for (EngineLobbyMemberRecord& destination : members)
+		for (EngineLobbyMemberRecord &destination : members)
 		{
 			if (destination.puid != source.puid)
 				continue;
@@ -373,7 +343,7 @@ namespace
 
 }
 
-EngineLobbyCollector& EngineLobbyCollector::Instance() noexcept
+EngineLobbyCollector &EngineLobbyCollector::Instance() noexcept
 {
 	static EngineLobbyCollector collector;
 	return collector;
@@ -401,18 +371,29 @@ void EngineLobbyCollector::Shutdown() noexcept
 	if (worker_.joinable())
 		worker_.join();
 	RemoveHooks();
-	std::lock_guard<std::mutex> lock(stateMutex_);
-	lobbyInterface_ = nullptr;
-	connectionInterface_ = nullptr;
-	platform_ = nullptr;
-	localProductUserId_ = nullptr;
-	details_ = nullptr;
-	lobbyId_[0] = '\0';
-	ownDetailsTried_ = false;
-	api_ = {};
+	void *details = nullptr;
+	DetailsReleaseFunction releaseDetails = nullptr;
+	{
+		std::lock_guard<std::mutex> lock(stateMutex_);
+		details = ownedDetails_;
+		releaseDetails = api_.releaseDetails;
+		ownedDetails_ = nullptr;
+		ownedDetailsLobbyId_[0] = '\0';
+		ownedDetailsGeneration_ = 0;
+		ownedDetailsInvalidated_ = false;
+		lobbyInterface_ = nullptr;
+		connectionInterface_ = nullptr;
+		platform_ = nullptr;
+		localProductUserId_ = nullptr;
+		lobbyId_[0] = '\0';
+		nextDetailsRetry_ = {};
+		api_ = {};
+	}
+	if (details != nullptr && releaseDetails != nullptr)
+		releaseDetails(details);
 }
 
-void EngineLobbyCollector::WorkerMain(EngineLobbyCollector* collector) noexcept
+void EngineLobbyCollector::WorkerMain(EngineLobbyCollector *collector) noexcept
 {
 	if (collector == nullptr)
 		return;
@@ -450,12 +431,16 @@ bool EngineLobbyCollector::ResolveInterfaces() noexcept
 	resolved.getLobbyInterface = reinterpret_cast<GetLobbyInterfaceFunction>(GetProcAddress(eos, "EOS_Platform_GetLobbyInterface"));
 	resolved.getConnectInterface = reinterpret_cast<GetConnectInterfaceFunction>(GetProcAddress(eos, "EOS_Platform_GetConnectInterface"));
 	resolved.loggedInUser = reinterpret_cast<LoggedInUserFunction>(GetProcAddress(eos, "EOS_Connect_GetLoggedInUserByIndex"));
+	resolved.getMemberByIndex = reinterpret_cast<GetMemberByIndexFunction>(GetProcAddress(eos, "EOS_LobbyDetails_GetMemberByIndex"));
 	resolved.copySearchResult = reinterpret_cast<CopySearchResultFunction>(GetProcAddress(eos, "EOS_LobbySearch_CopySearchResultByIndex"));
+	resolved.releaseDetails = reinterpret_cast<DetailsReleaseFunction>(GetProcAddress(eos, "EOS_LobbyDetails_Release"));
 	if (resolved.copyDetails == nullptr || resolved.memberCount == nullptr ||
 		resolved.copyMemberAttribute == nullptr || resolved.copyLobbyAttribute == nullptr ||
 		resolved.memberAttributeCount == nullptr || resolved.copyMemberAttributeByIndex == nullptr ||
 		resolved.productUserIdToString == nullptr || resolved.releaseAttribute == nullptr ||
-		resolved.copyInfo == nullptr || resolved.releaseInfo == nullptr)
+		resolved.copyInfo == nullptr || resolved.releaseInfo == nullptr ||
+		resolved.getMemberByIndex == nullptr ||
+		resolved.releaseDetails == nullptr)
 		return false;
 	std::lock_guard<std::mutex> lock(stateMutex_);
 	api_ = resolved;
@@ -469,21 +454,21 @@ bool EngineLobbyCollector::InstallHooks() noexcept
 		return false;
 	const DlModResult copyResult = EngineHookRuntime::RegisterForMod(
 		kHookOwner,
-		reinterpret_cast<void*>(api_.copyDetails),
-		reinterpret_cast<void*>(&HookCopyDetails),
-		reinterpret_cast<void**>(&originalCopyDetails_));
+		reinterpret_cast<void *>(api_.copyDetails),
+		reinterpret_cast<void *>(&HookCopyDetails),
+		reinterpret_cast<void **>(&originalCopyDetails_));
 	if (copyResult != DLMOD_RESULT_SUCCESS)
 		return false;
 	const DlModResult tickResult = EngineHookRuntime::RegisterForMod(
 		kHookOwner,
-		reinterpret_cast<void*>(GetProcAddress(GetModuleHandleA("EOSSDK-Win64-Shipping.dll"), "EOS_Platform_Tick")),
-		reinterpret_cast<void*>(&HookPlatformTick),
-		reinterpret_cast<void**>(&originalPlatformTick_));
+		reinterpret_cast<void *>(GetProcAddress(GetModuleHandleA("EOSSDK-Win64-Shipping.dll"), "EOS_Platform_Tick")),
+		reinterpret_cast<void *>(&HookPlatformTick),
+		reinterpret_cast<void **>(&originalPlatformTick_));
 	const DlModResult joinResult = EngineHookRuntime::RegisterForMod(
 		kHookOwner,
-		reinterpret_cast<void*>(GetProcAddress(GetModuleHandleA("EOSSDK-Win64-Shipping.dll"), "EOS_Lobby_JoinLobby")),
-		reinterpret_cast<void*>(&HookJoinLobby),
-		reinterpret_cast<void**>(&originalJoinLobby_));
+		reinterpret_cast<void *>(GetProcAddress(GetModuleHandleA("EOSSDK-Win64-Shipping.dll"), "EOS_Lobby_JoinLobby")),
+		reinterpret_cast<void *>(&HookJoinLobby),
+		reinterpret_cast<void **>(&originalJoinLobby_));
 	if (tickResult != DLMOD_RESULT_SUCCESS || joinResult != DLMOD_RESULT_SUCCESS)
 	{
 		EngineHookRuntime::RemoveForMod(kHookOwner);
@@ -496,9 +481,9 @@ bool EngineLobbyCollector::InstallHooks() noexcept
 	{
 		const DlModResult searchResult = EngineHookRuntime::RegisterForMod(
 			kHookOwner,
-			reinterpret_cast<void*>(api_.copySearchResult),
-			reinterpret_cast<void*>(&HookCopySearchResult),
-			reinterpret_cast<void**>(&originalCopySearchResult_));
+			reinterpret_cast<void *>(api_.copySearchResult),
+			reinterpret_cast<void *>(&HookCopySearchResult),
+			reinterpret_cast<void **>(&originalCopySearchResult_));
 		if (searchResult != DLMOD_RESULT_SUCCESS)
 			originalCopySearchResult_ = nullptr;
 	}
@@ -520,28 +505,67 @@ void EngineLobbyCollector::RemoveHooks() noexcept
 void EngineLobbyCollector::EnsureDetails() noexcept
 {
 	CopyDetailsFunction copyDetails = nullptr;
-	void* lobbyInterface = nullptr;
-	void* localProductUserId = nullptr;
+	DetailsReleaseFunction releaseDetails = nullptr;
+	void *previousDetails = nullptr;
+	void *lobbyInterface = nullptr;
+	void *localProductUserId = nullptr;
 	char lobbyId[64]{};
+	std::uint64_t generation = 0;
+	bool shouldCopy = false;
 	{
 		std::lock_guard<std::mutex> lock(stateMutex_);
-		if (lobbyId_[0] == '\0' || ownDetailsTried_ || api_.copyDetails == nullptr ||
-			lobbyInterface_ == nullptr || localProductUserId_ == nullptr)
-			return;
-		ownDetailsTried_ = true;
-		copyDetails = api_.copyDetails;
-		lobbyInterface = lobbyInterface_;
-		localProductUserId = localProductUserId_;
-		strncpy_s(lobbyId, sizeof(lobbyId), lobbyId_, _TRUNCATE);
+		if (ownedDetailsInvalidated_)
+		{
+			previousDetails = ownedDetails_;
+			ownedDetails_ = nullptr;
+			ownedDetailsLobbyId_[0] = '\0';
+			ownedDetailsGeneration_ = 0;
+			ownedDetailsInvalidated_ = false;
+		}
+		releaseDetails = api_.releaseDetails;
+		if (running_.load() && lobbyId_[0] != '\0' && ownedDetails_ == nullptr &&
+			std::chrono::steady_clock::now() >= nextDetailsRetry_ &&
+			api_.copyDetails != nullptr && releaseDetails != nullptr &&
+			lobbyInterface_ != nullptr && localProductUserId_ != nullptr)
+		{
+			nextDetailsRetry_ = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+			copyDetails = api_.copyDetails;
+			lobbyInterface = lobbyInterface_;
+			localProductUserId = localProductUserId_;
+			generation = lobbyGeneration_;
+			strncpy_s(lobbyId, sizeof(lobbyId), lobbyId_, _TRUNCATE);
+			shouldCopy = true;
+		}
 	}
+	if (previousDetails != nullptr && releaseDetails != nullptr)
+		releaseDetails(previousDetails);
+	if (!shouldCopy)
+		return;
 	CopyDetailsOptions options{};
 	options.lobbyId = lobbyId;
 	options.localProductUserId = localProductUserId;
-	void* details = nullptr;
+	void *details = nullptr;
 	if (copyDetails(lobbyInterface, &options, &details) == kSuccess && details != nullptr)
 	{
-		std::lock_guard<std::mutex> lock(stateMutex_);
-		details_ = details;
+		void *replacedDetails = nullptr;
+		DetailsReleaseFunction replacedDetailsRelease = nullptr;
+		{
+			std::lock_guard<std::mutex> lock(stateMutex_);
+			if (running_.load() && generation == lobbyGeneration_ &&
+				std::strcmp(lobbyId_, lobbyId) == 0)
+			{
+				replacedDetails = ownedDetails_;
+				replacedDetailsRelease = api_.releaseDetails;
+				ownedDetails_ = details;
+				ownedDetailsGeneration_ = generation;
+				strncpy_s(ownedDetailsLobbyId_, sizeof(ownedDetailsLobbyId_), lobbyId, _TRUNCATE);
+				details = nullptr;
+			}
+		}
+		if (replacedDetails != nullptr && replacedDetailsRelease != nullptr)
+			replacedDetailsRelease(replacedDetails);
+		if (details != nullptr)
+			releaseDetails(details);
 	}
 }
 
@@ -549,17 +573,24 @@ void EngineLobbyCollector::Refresh() noexcept
 {
 	EnsureDetails();
 	Api api;
-	void* details = nullptr;
-	void* connection = nullptr;
+	void *details = nullptr;
+	void *connection = nullptr;
+	std::uint64_t generation = 0;
+	char expectedLobbyId[64]{};
 	{
 		std::lock_guard<std::mutex> lock(stateMutex_);
 		api = api_;
-		details = details_;
+		if (!ownedDetailsInvalidated_ &&
+			ownedDetailsGeneration_ == lobbyGeneration_ &&
+			std::strcmp(ownedDetailsLobbyId_, lobbyId_) == 0)
+			details = ownedDetails_;
 		connection = connectionInterface_;
+		generation = lobbyGeneration_;
+		strncpy_s(expectedLobbyId, sizeof(expectedLobbyId), lobbyId_, _TRUNCATE);
 	}
 	if (details == nullptr || api.memberCount == nullptr || api.productUserIdToString == nullptr)
 	{
-		EngineLobbyData::Instance().SetStatus(DLMOD_LOBBY_STATUS_WAITING);
+		SetStatusIfCurrent(generation, DLMOD_LOBBY_STATUS_WAITING);
 		return;
 	}
 
@@ -574,42 +605,21 @@ void EngineLobbyCollector::Refresh() noexcept
 	if (ownerSteamId[0] == ':')
 		std::memmove(ownerSteamId, ownerSteamId + 1, std::strlen(ownerSteamId));
 	const std::uint32_t reportedCount = playersCountText[0] == '\0'
-		? 0U
-		: static_cast<std::uint32_t>(std::max(0, std::atoi(playersCountText)));
-	EngineLobbyData::Instance().SetLobbyMetadata(
-		lobbyId[0] != '\0' ? lobbyId : nullptr,
-		ownerName,
-		ownerSteamId,
-		reportedCount);
-
+											? 0U
+											: static_cast<std::uint32_t>(std::max(0, std::atoi(playersCountText)));
 	MemberCountOptions countOptions{};
 	const std::int32_t count = api.memberCount(details, &countOptions);
 	if (count <= 0 || count > static_cast<std::int32_t>(kMaximumMembers))
 	{
-		EngineLobbyData::Instance().SetStatus(DLMOD_LOBBY_STATUS_STALE);
+		SetStatusIfCurrent(generation, DLMOD_LOBBY_STATUS_STALE);
 		return;
 	}
 
 	std::vector<EngineLobbyMemberRecord> members;
 	members.reserve(static_cast<std::size_t>(count));
-	void* implementation = nullptr;
-	void* vtable = nullptr;
-	void* slot = nullptr;
-	if (!ReadField(details, 0, implementation) || !ReadField(implementation, 0, vtable) ||
-		!ReadField(vtable, 0x40, slot) || slot == nullptr)
-	{
-		EngineLobbyData::Instance().SetStatus(DLMOD_LOBBY_STATUS_STALE);
-		return;
-	}
 	for (std::int32_t index = 0; index < count; ++index)
 	{
-		MemberIndexOptions options{};
-		options.index = static_cast<std::uint32_t>(index);
-		void* output = nullptr;
-		void* member = nullptr;
-		member = InvokeMemberGetter(slot, implementation, &options, &output);
-		if (!IsValidPointer(member) && IsValidPointer(output))
-			member = output;
+		const void *member = api.getMemberByIndex(details, index);
 		if (member == nullptr)
 			continue;
 		char puid[64]{};
@@ -639,21 +649,76 @@ void EngineLobbyCollector::Refresh() noexcept
 		}
 		MergeMember(members, record);
 	}
-	if (!members.empty())
 	{
-		EngineLobbyData::Instance().ReplaceCurrent(members);
-		EngineLobbyData::Instance().MergeHistory(members);
+		std::lock_guard<std::mutex> lock(stateMutex_);
+		if (!running_.load() || ownedDetailsInvalidated_ ||
+			generation != lobbyGeneration_ || ownedDetails_ != details ||
+			std::strcmp(ownedDetailsLobbyId_, expectedLobbyId) != 0)
+			return;
+		EngineLobbyData::Instance().SetLobbyMetadata(
+			expectedLobbyId[0] != '\0' ? expectedLobbyId : nullptr,
+			ownerName,
+			ownerSteamId,
+			reportedCount);
+		if (!members.empty())
+		{
+			EngineLobbyData::Instance().ReplaceCurrent(members);
+			EngineLobbyData::Instance().MergeHistory(members);
+		}
+		else
+			EngineLobbyData::Instance().SetStatus(DLMOD_LOBBY_STATUS_STALE);
 	}
-	else
-		EngineLobbyData::Instance().SetStatus(DLMOD_LOBBY_STATUS_STALE);
+}
+
+void EngineLobbyCollector::SetStatusIfCurrent(
+	std::uint64_t generation,
+	std::uint32_t status) noexcept
+{
+	std::lock_guard<std::mutex> lock(stateMutex_);
+	if (running_.load() && !ownedDetailsInvalidated_ && generation == lobbyGeneration_)
+		EngineLobbyData::Instance().SetStatus(status);
+}
+
+void EngineLobbyCollector::UpdateLobbyTarget(
+	void *lobbyInterface,
+	const char *lobbyId,
+	const void *localProductUserId,
+	bool onlyIfUnset) noexcept
+{
+	std::lock_guard<std::mutex> lock(stateMutex_);
+	if (onlyIfUnset && lobbyId_[0] != '\0')
+		return;
+	const bool lobbyInterfaceChanged = lobbyInterface != nullptr && lobbyInterface_ != lobbyInterface;
+	if (lobbyInterface != nullptr)
+		lobbyInterface_ = lobbyInterface;
+	if (localProductUserId != nullptr)
+		localProductUserId_ = const_cast<void *>(localProductUserId);
+	if (lobbyInterfaceChanged)
+	{
+		ownedDetailsInvalidated_ = ownedDetails_ != nullptr;
+		ownedDetailsLobbyId_[0] = '\0';
+		ownedDetailsGeneration_ = 0;
+		nextDetailsRetry_ = {};
+		++lobbyGeneration_;
+	}
+	if (lobbyId != nullptr && lobbyId[0] != '\0' && std::strcmp(lobbyId_, lobbyId) != 0)
+	{
+		strncpy_s(lobbyId_, sizeof(lobbyId_), lobbyId, _TRUNCATE);
+		ownedDetailsInvalidated_ = ownedDetails_ != nullptr;
+		ownedDetailsLobbyId_[0] = '\0';
+		ownedDetailsGeneration_ = 0;
+		nextDetailsRetry_ = {};
+		++lobbyGeneration_;
+		EngineLobbyData::Instance().ResetLobby(lobbyId_);
+	}
 }
 
 std::int32_t EngineLobbyCollector::HookCopyDetails(
-	void* lobbyInterface,
-	const void* options,
-	void** output) noexcept
+	void *lobbyInterface,
+	const void *options,
+	void **output) noexcept
 {
-	EngineLobbyCollector& collector = Instance();
+	EngineLobbyCollector &collector = Instance();
 	CopyDetailsFunction original = nullptr;
 	{
 		std::lock_guard<std::mutex> lock(collector.stateMutex_);
@@ -664,51 +729,22 @@ std::int32_t EngineLobbyCollector::HookCopyDetails(
 		return result;
 	char lobbyId[64]{};
 	ReadOptionString(options, 0x08, lobbyId, sizeof(lobbyId));
-	Api api;
-	{
-		std::lock_guard<std::mutex> lock(collector.stateMutex_);
-		api = collector.api_;
-	}
-	if (lobbyId[0] == '\0')
-		CopyLobbyId(*output, &api, lobbyId, sizeof(lobbyId));
-	{
-		std::lock_guard<std::mutex> lock(collector.stateMutex_);
-		collector.lobbyInterface_ = lobbyInterface;
-		collector.details_ = *output;
-		if (lobbyId[0] != '\0' && std::strcmp(lobbyId, collector.lobbyId_) != 0)
-		{
-			strncpy_s(collector.lobbyId_, sizeof(collector.lobbyId_), lobbyId, _TRUNCATE);
-			collector.ownDetailsTried_ = false;
-			EngineLobbyData::Instance().ResetLobby(collector.lobbyId_);
-		}
-	}
+	collector.UpdateLobbyTarget(lobbyInterface, lobbyId, nullptr, true);
 	return result;
 }
 
 std::int32_t EngineLobbyCollector::HookJoinLobby(
-	void* lobbyInterface,
-	const void* options,
-	void* callback,
-	void* clientData) noexcept
+	void *lobbyInterface,
+	const void *options,
+	void *callback,
+	void *clientData) noexcept
 {
-	EngineLobbyCollector& collector = Instance();
+	EngineLobbyCollector &collector = Instance();
 	char lobbyId[64]{};
 	ReadOptionString(options, 0x08, lobbyId, sizeof(lobbyId));
-	void* localPuid = nullptr;
+	void *localPuid = nullptr;
 	ReadOptionPointer(options, 0x10, localPuid);
-	{
-		std::lock_guard<std::mutex> lock(collector.stateMutex_);
-		collector.lobbyInterface_ = lobbyInterface;
-		if (localPuid != nullptr)
-			collector.localProductUserId_ = localPuid;
-		if (lobbyId[0] != '\0' && std::strcmp(lobbyId, collector.lobbyId_) != 0)
-		{
-			strncpy_s(collector.lobbyId_, sizeof(collector.lobbyId_), lobbyId, _TRUNCATE);
-			collector.details_ = nullptr;
-			collector.ownDetailsTried_ = false;
-			EngineLobbyData::Instance().ResetLobby(collector.lobbyId_);
-		}
-	}
+	collector.UpdateLobbyTarget(lobbyInterface, lobbyId, localPuid, false);
 	JoinLobbyFunction original = nullptr;
 	{
 		std::lock_guard<std::mutex> lock(collector.stateMutex_);
@@ -718,35 +754,65 @@ std::int32_t EngineLobbyCollector::HookJoinLobby(
 }
 
 std::int32_t EngineLobbyCollector::HookPlatformTick(
-	void* platform,
-	const void* options) noexcept
+	void *platform,
+	const void *options) noexcept
 {
-	EngineLobbyCollector& collector = Instance();
+	EngineLobbyCollector &collector = Instance();
+	GetLobbyInterfaceFunction getLobbyInterface = nullptr;
+	GetConnectInterfaceFunction getConnectInterface = nullptr;
+	LoggedInUserFunction loggedInUser = nullptr;
+	void *previousPlatform = nullptr;
+	void *previousConnection = nullptr;
+	bool needsLocalProductUserId = false;
 	{
 		std::lock_guard<std::mutex> lock(collector.stateMutex_);
-		collector.platform_ = platform;
-		if (collector.api_.getLobbyInterface != nullptr)
-			collector.lobbyInterface_ = collector.api_.getLobbyInterface(platform);
-		if (collector.api_.getConnectInterface != nullptr)
-			collector.connectionInterface_ = collector.api_.getConnectInterface(platform);
-		if (collector.connectionInterface_ != nullptr && collector.api_.loggedInUser != nullptr &&
-			collector.localProductUserId_ == nullptr)
-			collector.localProductUserId_ = const_cast<void*>(collector.api_.loggedInUser(collector.connectionInterface_, 0));
+		getLobbyInterface = collector.api_.getLobbyInterface;
+		getConnectInterface = collector.api_.getConnectInterface;
+		loggedInUser = collector.api_.loggedInUser;
+		previousPlatform = collector.platform_;
+		previousConnection = collector.connectionInterface_;
+		needsLocalProductUserId = collector.localProductUserId_ == nullptr;
+	}
+	void *lobbyInterface = getLobbyInterface == nullptr ? nullptr : getLobbyInterface(platform);
+	void *connectionInterface =
+		getConnectInterface == nullptr ? nullptr : getConnectInterface(platform);
+	const void *localProductUserId = nullptr;
+	if (connectionInterface != nullptr && loggedInUser != nullptr &&
+		(previousPlatform != platform || previousConnection != connectionInterface ||
+			needsLocalProductUserId))
+	{
+		localProductUserId = loggedInUser(connectionInterface, 0);
 	}
 	PlatformTickFunction original = nullptr;
 	{
 		std::lock_guard<std::mutex> lock(collector.stateMutex_);
+		const bool interfacesChanged = collector.platform_ != platform ||
+									   collector.lobbyInterface_ != lobbyInterface ||
+									   collector.connectionInterface_ != connectionInterface;
+		collector.platform_ = platform;
+		collector.lobbyInterface_ = lobbyInterface;
+		collector.connectionInterface_ = connectionInterface;
+		if (localProductUserId != nullptr)
+			collector.localProductUserId_ = const_cast<void *>(localProductUserId);
+		if (interfacesChanged)
+		{
+			collector.ownedDetailsInvalidated_ = collector.ownedDetails_ != nullptr;
+			collector.ownedDetailsLobbyId_[0] = '\0';
+			collector.ownedDetailsGeneration_ = 0;
+			collector.nextDetailsRetry_ = {};
+			++collector.lobbyGeneration_;
+		}
 		original = collector.originalPlatformTick_;
 	}
 	return original == nullptr ? -1 : original(platform, options);
 }
 
 std::int32_t EngineLobbyCollector::HookCopySearchResult(
-	void* search,
-	const void* options,
-	void** output) noexcept
+	void *search,
+	const void *options,
+	void **output) noexcept
 {
-	EngineLobbyCollector& collector = Instance();
+	EngineLobbyCollector &collector = Instance();
 	CopySearchResultFunction original = nullptr;
 	Api api;
 	{
@@ -774,4 +840,3 @@ std::int32_t EngineLobbyCollector::HookCopySearchResult(
 	}
 	return result;
 }
-

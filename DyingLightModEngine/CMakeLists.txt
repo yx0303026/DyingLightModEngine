@@ -52,6 +52,7 @@ target_link_libraries(DearImGui PUBLIC d3d11 dxgi user32 imm32)
 
 add_library(DyingLightModEngineImGui STATIC
     "imgui/src/ui.cpp"
+    "imgui/src/font.cpp"
     "imgui/src/layout.cpp"
     "imgui/src/controls.cpp"
     "imgui/src/navigation.cpp"
@@ -63,6 +64,7 @@ add_library(DyingLightModEngineImGui STATIC
     "imgui/src/vulkan_hook.cpp"
     "imgui/src/vuk_hook.cpp"
     "imgui/include/dl_imgui/ui.h"
+    "imgui/include/dl_imgui/font.h"
     "imgui/include/dl_imgui/layout.h"
     "imgui/include/dl_imgui/controls.h"
     "imgui/include/dl_imgui/navigation.h"
