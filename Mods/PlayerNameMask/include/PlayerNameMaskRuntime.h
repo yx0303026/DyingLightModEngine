@@ -27,8 +27,9 @@ namespace player_name_mask
 		// 区域概览：保存游戏字符串布局和本地编号映射。
 		struct EngineWideString final
 		{
-			const wchar_t* data = nullptr;
-			std::uint64_t length = 0;
+			wchar_t* data = nullptr;
+			std::uint32_t length = 0;
+			std::uint32_t capacity = 0;
 		};
 
 		enum class Team : std::uint8_t
@@ -44,17 +45,32 @@ namespace player_name_mask
 		};
 
 		using GetPlayerNameFunction = EngineWideString* (__fastcall*)(void* object);
+		using GetLobbyClientProfileNameFunction = EngineWideString* (__fastcall*)(
+			void* game,
+			EngineWideString* result,
+			std::uint32_t clientIndex);
 
 		// 区域概览：静态 Hook 入口和本地名称生成。
 		static EngineWideString* __fastcall GetPlayerNameDetour(void* object) noexcept;
+		static EngineWideString* __fastcall GetLobbyClientProfileNameDetour(
+			void* game,
+			EngineWideString* result,
+			std::uint32_t clientIndex) noexcept;
 		EngineWideString* HandlePlayerName(void* object) noexcept;
+		EngineWideString* HandleLobbyClientProfileName(
+			void* game,
+			EngineWideString* result,
+			std::uint32_t clientIndex) noexcept;
 		EngineWideString* BuildMaskedName(Team team, std::uint32_t index) noexcept;
 		NameRecord GetOrCreateRecord(void* object, Team team) noexcept;
+		std::uint32_t GetOrCreateConnectionIndex(std::uint32_t clientIndex) noexcept;
 
 		// 区域概览：模块、PE 镜像和 RTTI 安全检查。
 		static HMODULE FindGameModule() noexcept;
+		static HMODULE FindEngineModule() noexcept;
 		static bool ReadImageSize(HMODULE module, std::uint32_t& imageSize) noexcept;
 		static bool ResolveTarget(HMODULE module, void** target) noexcept;
+		static bool ResolveLobbyProfileNameTarget(HMODULE module, void** target) noexcept;
 		static bool ReadTypeName(
 			const void* object,
 			char* buffer,
@@ -66,14 +82,17 @@ namespace player_name_mask
 		// 区域概览：运行状态字段集中声明，便于卸载和版本失效时复位。
 		static PlayerNameMaskRuntime* activeRuntime_;
 		static GetPlayerNameFunction originalGetPlayerName_;
+		static GetLobbyClientProfileNameFunction originalGetLobbyClientProfileName_;
 
 		const DlModHostApiV1* hostApi_ = nullptr;
 		void* hostContext_ = nullptr;
 		EngineLogCallback hostLog_ = nullptr;
 		std::mutex recordsMutex_;
 		std::unordered_map<void*, NameRecord> records_;
+		std::unordered_map<std::uint32_t, std::uint32_t> connectionNameIndices_;
 		std::uint32_t nextHumanIndex_ = 1;
 		std::uint32_t nextHunterIndex_ = 1;
+		std::uint32_t nextConnectionNameIndex_ = 1;
 		bool initialized_ = false;
 	};
 }

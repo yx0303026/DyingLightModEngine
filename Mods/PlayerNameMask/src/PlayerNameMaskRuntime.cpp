@@ -13,6 +13,7 @@ namespace player_name_mask
 	{
 		// 区域概览：游戏版本绑定和安全上限。
 		constexpr wchar_t kGameModuleName[] = L"gamedll_x64_rwdi.dll";
+		constexpr wchar_t kEngineModuleName[] = L"engine_x64_rwdi.dll";
 		constexpr std::uintptr_t kGetPlayerNameRva = 0x491E00;
 		constexpr std::uint32_t kMinimumImageSize =
 			static_cast<std::uint32_t>(kGetPlayerNameRva + 0x100);
@@ -22,6 +23,8 @@ namespace player_name_mask
 		};
 		constexpr std::size_t kTypeNameCapacity = 256;
 		constexpr std::size_t kMaskedNameCapacity = 64;
+		constexpr char kLobbyProfileNameExport[] =
+			"?LobbyGetClientProfileName@IGame@@QEAA?BV?$string_base@_W@ttl@@I@Z";
 
 		struct RttiCompleteObjectLocator final
 		{
@@ -68,6 +71,8 @@ namespace player_name_mask
 	PlayerNameMaskRuntime* PlayerNameMaskRuntime::activeRuntime_ = nullptr;
 	PlayerNameMaskRuntime::GetPlayerNameFunction
 		PlayerNameMaskRuntime::originalGetPlayerName_ = nullptr;
+	PlayerNameMaskRuntime::GetLobbyClientProfileNameFunction
+		PlayerNameMaskRuntime::originalGetLobbyClientProfileName_ = nullptr;
 
 	DlModResult PlayerNameMaskRuntime::Initialize(const DlModHostApiV1* hostApi) noexcept
 	{
@@ -83,17 +88,31 @@ namespace player_name_mask
 		}
 
 		HMODULE gameModule = FindGameModule();
+		HMODULE engineModule = FindEngineModule();
 		void* target = nullptr;
-		if (!ResolveTarget(gameModule, &target))
+		void* lobbyNameTarget = nullptr;
+		if (!ResolveTarget(gameModule, &target) ||
+			!ResolveLobbyProfileNameTarget(engineModule, &lobbyNameTarget))
 			return DLMOD_RESULT_UNSUPPORTED_FEATURE;
 
-		const DlModResult hookResult = hostApi->hooks->registerHook(
+		DlModResult hookResult = hostApi->hooks->registerHook(
 			target,
 			reinterpret_cast<void*>(&GetPlayerNameDetour),
 			reinterpret_cast<void**>(&originalGetPlayerName_));
 		if (hookResult != DLMOD_RESULT_SUCCESS)
 		{
 			originalGetPlayerName_ = nullptr;
+			return hookResult;
+		}
+
+		hookResult = hostApi->hooks->registerHook(
+			lobbyNameTarget,
+			reinterpret_cast<void*>(&GetLobbyClientProfileNameDetour),
+			reinterpret_cast<void**>(&originalGetLobbyClientProfileName_));
+		if (hookResult != DLMOD_RESULT_SUCCESS)
+		{
+			originalGetPlayerName_ = nullptr;
+			originalGetLobbyClientProfileName_ = nullptr;
 			return hookResult;
 		}
 
@@ -117,12 +136,15 @@ namespace player_name_mask
 		{
 			const std::lock_guard<std::mutex> lock(recordsMutex_);
 			records_.clear();
+			connectionNameIndices_.clear();
 			nextHumanIndex_ = 1;
 			nextHunterIndex_ = 1;
+			nextConnectionNameIndex_ = 1;
 		}
 		if (activeRuntime_ == this)
 			activeRuntime_ = nullptr;
 		originalGetPlayerName_ = nullptr;
+		originalGetLobbyClientProfileName_ = nullptr;
 		if (hostLog_ != nullptr)
 		{
 			hostLog_(
@@ -143,6 +165,22 @@ namespace player_name_mask
 		if (runtime == nullptr)
 			return originalGetPlayerName_ == nullptr ? nullptr : originalGetPlayerName_(object);
 		return runtime->HandlePlayerName(object);
+	}
+
+	PlayerNameMaskRuntime::EngineWideString*
+		__fastcall PlayerNameMaskRuntime::GetLobbyClientProfileNameDetour(
+			void* game,
+			EngineWideString* result,
+			std::uint32_t clientIndex) noexcept
+	{
+		PlayerNameMaskRuntime* runtime = activeRuntime_;
+		if (runtime == nullptr)
+		{
+			return originalGetLobbyClientProfileName_ == nullptr
+				? nullptr
+				: originalGetLobbyClientProfileName_(game, result, clientIndex);
+		}
+		return runtime->HandleLobbyClientProfileName(game, result, clientIndex);
 	}
 
 	PlayerNameMaskRuntime::EngineWideString*
@@ -175,6 +213,53 @@ namespace player_name_mask
 	}
 
 	PlayerNameMaskRuntime::EngineWideString*
+		PlayerNameMaskRuntime::HandleLobbyClientProfileName(
+			void* game,
+			EngineWideString* result,
+			std::uint32_t clientIndex) noexcept
+	{
+		if (originalGetLobbyClientProfileName_ == nullptr)
+			return nullptr;
+
+		EngineWideString* profile = nullptr;
+		__try
+		{
+			profile = originalGetLobbyClientProfileName_(game, result, clientIndex);
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			return nullptr;
+		}
+		if (profile == nullptr || profile->data == nullptr)
+			return profile;
+
+		const std::uint32_t aliasIndex = GetOrCreateConnectionIndex(clientIndex);
+		if (aliasIndex == 0)
+			return profile;
+
+		wchar_t alias[32]{};
+		_snwprintf_s(
+			alias,
+			_countof(alias),
+			_TRUNCATE,
+			L"玩家 %u",
+			aliasIndex);
+		const std::size_t length = std::wcslen(alias);
+		if (profile->capacity <= length)
+			return profile;
+		__try
+		{
+			std::memcpy(profile->data, alias, (length + 1) * sizeof(wchar_t));
+			profile->length = static_cast<std::uint32_t>(length);
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			return profile;
+		}
+		return profile;
+	}
+
+	PlayerNameMaskRuntime::EngineWideString*
 		PlayerNameMaskRuntime::BuildMaskedName(Team team, std::uint32_t index) noexcept
 	{
 		thread_local wchar_t maskedName[kMaskedNameCapacity]{};
@@ -188,7 +273,8 @@ namespace player_name_mask
 			prefix,
 			index);
 		result.data = maskedName;
-		result.length = std::wcslen(maskedName);
+		result.length = static_cast<std::uint32_t>(std::wcslen(maskedName));
+		result.capacity = static_cast<std::uint32_t>(_countof(maskedName) - 1);
 		return &result;
 	}
 
@@ -217,9 +303,33 @@ namespace player_name_mask
 		}
 	}
 
+	std::uint32_t PlayerNameMaskRuntime::GetOrCreateConnectionIndex(
+		std::uint32_t clientIndex) noexcept
+	{
+		try
+		{
+			const std::lock_guard<std::mutex> lock(recordsMutex_);
+			const auto existing = connectionNameIndices_.find(clientIndex);
+			if (existing != connectionNameIndices_.end())
+				return existing->second;
+			const std::uint32_t aliasIndex = nextConnectionNameIndex_++;
+			connectionNameIndices_.emplace(clientIndex, aliasIndex);
+			return aliasIndex;
+		}
+		catch (...)
+		{
+			return 0;
+		}
+	}
+
 	HMODULE PlayerNameMaskRuntime::FindGameModule() noexcept
 	{
 		return GetModuleHandleW(kGameModuleName);
+	}
+
+	HMODULE PlayerNameMaskRuntime::FindEngineModule() noexcept
+	{
+		return GetModuleHandleW(kEngineModuleName);
 	}
 
 	bool PlayerNameMaskRuntime::ReadImageSize(
@@ -269,6 +379,19 @@ namespace player_name_mask
 			return false;
 		}
 		*target = address;
+		return *target != nullptr;
+	}
+
+	bool PlayerNameMaskRuntime::ResolveLobbyProfileNameTarget(
+		HMODULE module,
+		void** target) noexcept
+	{
+		if (target == nullptr)
+			return false;
+		*target = nullptr;
+		if (module == nullptr)
+			return false;
+		*target = reinterpret_cast<void*>(GetProcAddress(module, kLobbyProfileNameExport));
 		return *target != nullptr;
 	}
 
