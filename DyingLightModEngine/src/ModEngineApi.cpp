@@ -2,6 +2,7 @@
 #include "EngineLogger.h"
 
 #include <Windows.h>
+#include <cstring>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -83,7 +84,8 @@ namespace {
 
 	DlModResult MODSDK_CALL Initialize(const DlModHostApiV1* hostApi)
 	{
-		if (hostApi == nullptr || hostApi->structSize < sizeof(DlModHostApiV1)) {
+		if (hostApi == nullptr ||
+			hostApi->structSize < offsetof(DlModHostApiV1, getUiMouseState)) {
 			return DLMOD_RESULT_INVALID_ARGUMENT;
 		}
 		if (hostApi->abiVersion != MODSDK_ABI_VERSION) {
@@ -96,7 +98,17 @@ namespace {
 		if (runtime.initialized) {
 			return DLMOD_RESULT_INVALID_STATE;
 		}
-		runtime.hostApi = *hostApi;
+		runtime.hostApi = {};
+		std::memcpy(
+			&runtime.hostApi,
+			hostApi,
+			(hostApi->structSize < sizeof(runtime.hostApi))
+				? hostApi->structSize
+				: sizeof(runtime.hostApi));
+		runtime.hostApi.structSize =
+			hostApi->structSize < sizeof(runtime.hostApi)
+			? hostApi->structSize
+			: sizeof(runtime.hostApi);
 		runtime.initialized = true;
 		return DLMOD_RESULT_SUCCESS;
 	}

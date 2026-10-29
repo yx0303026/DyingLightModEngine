@@ -55,6 +55,7 @@ add_library(DyingLightModEngineImGui STATIC
     "imgui/src/layout.cpp"
     "imgui/src/controls.cpp"
     "imgui/src/navigation.cpp"
+    "imgui/src/style.cpp"
     "imgui/src/hook_runtime.cpp"
     "imgui/src/dx11_hook.cpp"
     "imgui/src/dx12_hook.cpp"
@@ -65,6 +66,7 @@ add_library(DyingLightModEngineImGui STATIC
     "imgui/include/dl_imgui/layout.h"
     "imgui/include/dl_imgui/controls.h"
     "imgui/include/dl_imgui/navigation.h"
+    "imgui/include/dl_imgui/style.h"
     "imgui/include/dl_imgui/imgui.h"
     "imgui/include/dl_imgui/render_hook.h"
     "imgui/include/dl_imgui/dx11_hook.h"
@@ -103,6 +105,7 @@ add_library(DyingLightModEngine SHARED
     "src/EngineGraphicsRuntime.cpp"
     "src/EngineInputRuntime.cpp"
     "src/EngineDirectInputRuntime.cpp"
+    "src/EngineCollisionRuntime.cpp"
     "include/EngineHost.h"
     "include/EngineAbi.h"
     "include/EngineLogger.h"
@@ -110,6 +113,7 @@ add_library(DyingLightModEngine SHARED
     "include/EngineGraphicsRuntime.h"
     "include/EngineInputRuntime.h"
     "include/EngineDirectInputRuntime.h"
+    "include/EngineCollisionRuntime.h"
     "${DLMOD_ENGINE_DEF}"
 )
 

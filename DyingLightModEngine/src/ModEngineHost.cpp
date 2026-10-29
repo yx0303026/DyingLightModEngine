@@ -2,6 +2,7 @@
 
 #include "EngineAbi.h"
 #include "EngineDirectInputRuntime.h"
+#include "EngineCollisionRuntime.h"
 #include "EngineGraphicsRuntime.h"
 #include "EngineLogger.h"
 #include "EngineModManager.h"
@@ -37,7 +38,8 @@ bool InitializeModEngine(HMODULE engineModule) noexcept
 		MODSDK_ABI_VERSION,
 		nullptr,
 		&EngineLogger::HostCallback,
-		&EngineDirectInputRuntime::GetUiMouseState
+		&EngineDirectInputRuntime::GetUiMouseState,
+		EngineCollisionRuntime::GetApi()
 	};
 	if (engineApi.initialize(&hostApi) != DLMOD_RESULT_SUCCESS) {
 		OutputDebugStringA("[DyingLightModEngine] Engine initialization failed\n");

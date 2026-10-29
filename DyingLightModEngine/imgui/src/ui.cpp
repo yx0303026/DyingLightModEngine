@@ -1,4 +1,5 @@
 #include "dl_imgui/ui.h"
+#include "dl_imgui/style.h"
 
 #include <algorithm>
 #include <cmath>
@@ -215,6 +216,10 @@ namespace dl::imgui {
 			return false;
 		}
 		context_ = ImGui::CreateContext();
+		if (context_ != nullptr) {
+			ImGui::SetCurrentContext(context_);
+			ApplyDefaultStyle();
+		}
 		return context_ != nullptr;
 	}
 

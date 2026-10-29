@@ -17,6 +17,23 @@ across DLL boundaries. The UI context owns an ImGui context. The backend frame
 functions must run before `UiContext::BeginFrame`; after rendering, the host
 submits `ImGui::GetDrawData()` through the matching renderer backend.
 
+## Default Style
+
+`UiContext::Create()` applies the default `StylePreset::Sidebar` theme. It is a
+dark, low-contrast theme with compact spacing, rounded controls, and a muted
+selected-navigation background matching the engine's sidebar layout.
+
+The preset can also be applied explicitly after selecting an ImGui context:
+
+```cpp
+dl::imgui::ApplyStyle(dl::imgui::StylePreset::Sidebar);
+// Equivalent shorthand:
+dl::imgui::ApplyDefaultStyle();
+```
+
+Apply the preset before the first frame. Individual controls can still override
+colors, rounding, and spacing through `dl::imgui::Style`.
+
 ## UI Scaling
 
 Each `UiContext` owns an independent proportional scale. Set it before
