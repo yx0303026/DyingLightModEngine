@@ -1,6 +1,7 @@
 #include "dl_imgui/ui.h"
 
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 
 namespace dl::imgui {
@@ -35,11 +36,12 @@ namespace dl::imgui {
 					++colorCount_;
 				}
 				if (style.frameRounding >= 0.0F) {
-					ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, style.frameRounding);
+					ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, ScaleSize(style.frameRounding));
 					++styleCount_;
 				}
 				if (style.itemSpacing >= 0.0F) {
-					ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(style.itemSpacing, style.itemSpacing));
+					const float spacing = ScaleSize(style.itemSpacing);
+					ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(spacing, spacing));
 					++styleCount_;
 				}
 			}
@@ -71,6 +73,21 @@ namespace dl::imgui {
 
 	} // namespace
 
+	float GetScaleFactor() noexcept
+	{
+		return ImGui::GetCurrentContext() == nullptr ? 1.0F : ImGui::GetIO().FontGlobalScale;
+	}
+
+	float ScaleSize(float value) noexcept
+	{
+		return value < 0.0F ? value : value * GetScaleFactor();
+	}
+
+	ImVec2 ScaleSize(const ImVec2& value) noexcept
+	{
+		return ImVec2(ScaleSize(value.x), ScaleSize(value.y));
+	}
+
 	UIElement::~UIElement() = default;
 
 	void UIElement::Render()
@@ -81,13 +98,20 @@ namespace dl::imgui {
 
 		ImGui::PushID(id_.empty() ? static_cast<const void*>(this) : id_.c_str());
 		StyleScope styleScope(style_);
-		RenderMargin(layout_.margin);
+		const float scale = GetScaleFactor();
+		const Thickness scaledMargin{
+			layout_.margin.left * scale,
+			layout_.margin.top * scale,
+			layout_.margin.right * scale,
+			layout_.margin.bottom * scale
+		};
+		RenderMargin(scaledMargin);
 		if (visibility_ == Visibility::Visible) {
 			OnRender();
-    } else {
-        ImGui::Dummy(ResolveSize(ImVec2(0.0F, 0.0F)));
+		} else {
+			ImGui::Dummy(ResolveSize(ImVec2(0.0F, 0.0F)));
 		}
-		RenderTrailingMargin(layout_.margin);
+		RenderTrailingMargin(scaledMargin);
 		ImGui::PopID();
 	}
 
@@ -139,8 +163,8 @@ namespace dl::imgui {
 	ImVec2 UIElement::ResolveSize(const ImVec2& fallback) const noexcept
 	{
 		return ImVec2(
-			layout_.width >= 0.0F ? layout_.width : fallback.x,
-			layout_.height >= 0.0F ? layout_.height : fallback.y);
+			ScaleSize(layout_.width >= 0.0F ? layout_.width : fallback.x),
+			ScaleSize(layout_.height >= 0.0F ? layout_.height : fallback.y));
 	}
 
 	UIElement& Component::AddChild(std::unique_ptr<UIElement> child)
@@ -201,6 +225,7 @@ namespace dl::imgui {
 			context_ = nullptr;
 		}
 		mouseProviderActive_ = false;
+		appliedScale_ = 1.0F;
 	}
 
 	bool UiContext::IsCreated() const noexcept
@@ -211,6 +236,20 @@ namespace dl::imgui {
 	ImGuiContext* UiContext::GetNativeContext() const noexcept
 	{
 		return context_;
+	}
+
+	float UiContext::GetScale() const noexcept
+	{
+		return scale_;
+	}
+
+	void UiContext::SetScale(float scale) noexcept
+	{
+		if (!std::isfinite(scale)) {
+			scale_ = 1.0F;
+			return;
+		}
+		scale_ = std::clamp(scale, 0.1F, 8.0F);
 	}
 
 	void UiContext::SetMouseStateProvider(ModEngineGetUiMouseStateFn provider) noexcept
@@ -259,6 +298,11 @@ namespace dl::imgui {
 	{
 		if (context_ != nullptr) {
 			ImGui::SetCurrentContext(context_);
+			if (scale_ != appliedScale_) {
+				ImGui::GetStyle().ScaleAllSizes(scale_ / appliedScale_);
+				ImGui::GetIO().FontGlobalScale = scale_;
+				appliedScale_ = scale_;
+			}
 			ApplyMouseState();
 			ImGui::NewFrame();
 		}

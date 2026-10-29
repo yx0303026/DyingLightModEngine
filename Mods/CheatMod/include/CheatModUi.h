@@ -41,6 +41,7 @@ namespace cheat_mod {
 		void BuildSettingsPage(dl::imgui::Page& page);
 		void OnGodModeChanged(bool enabled) noexcept;
 		void OnInfiniteStaminaChanged(bool enabled) noexcept;
+		void OnUiScaleChanged(float scale) noexcept;
 		bool InitializeGraphics(void* graphicsContext) noexcept;
 		void ShutdownGraphics() noexcept;
 		bool CreateRenderTarget() noexcept;
@@ -59,6 +60,7 @@ namespace cheat_mod {
 		bool godModeEnabled_ = false;
 		bool infiniteStaminaEnabled_ = false;
 		float playerSpeed_ = 1.0F;
+		float uiScale_ = 1.0F;
 	};
 
 } // namespace cheat_mod

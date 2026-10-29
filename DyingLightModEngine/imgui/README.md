@@ -17,6 +17,23 @@ across DLL boundaries. The UI context owns an ImGui context. The backend frame
 functions must run before `UiContext::BeginFrame`; after rendering, the host
 submits `ImGui::GetDrawData()` through the matching renderer backend.
 
+## UI Scaling
+
+Each `UiContext` owns an independent proportional scale. Set it before
+`BeginFrame`; changes made during a frame take effect on the next frame:
+
+```cpp
+context.SetScale(1.25F);
+const float width = dl::imgui::ScaleSize(760.0F);
+const ImVec2 size = dl::imgui::ScaleSize(ImVec2(760.0F, 520.0F));
+```
+
+The scale applies to the context's font, ImGui style metrics, and explicit
+dimensions, margins, and navigation widths used by wrapped UI elements.
+`ScaleSize` is provided for dimensions passed directly to Dear ImGui, such as
+`SetNextWindowSize`; it uses the current ImGui context, so mods remain
+independent.
+
 ## Render Hooks
 
 Include `dl_imgui/hooks.h`. DX11 and DX12 hooks install against a live swap

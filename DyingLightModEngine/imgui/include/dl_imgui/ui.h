@@ -53,6 +53,10 @@ namespace dl::imgui {
 		float itemSpacing = -1.0F;
 	};
 
+	float GetScaleFactor() noexcept;
+	float ScaleSize(float value) noexcept;
+	ImVec2 ScaleSize(const ImVec2& value) noexcept;
+
 	class UIElement {
 	public:
 		virtual ~UIElement();
@@ -124,6 +128,8 @@ namespace dl::imgui {
 		void Destroy() noexcept;
 		bool IsCreated() const noexcept;
 		ImGuiContext* GetNativeContext() const noexcept;
+		float GetScale() const noexcept;
+		void SetScale(float scale) noexcept;
 		void SetMouseStateProvider(ModEngineGetUiMouseStateFn provider) noexcept;
 		bool IsMouseProviderActive() const noexcept;
 		void BeginFrame();
@@ -136,6 +142,8 @@ namespace dl::imgui {
 		ImGuiContext* context_ = nullptr;
 		ModEngineGetUiMouseStateFn mouseStateProvider_ = nullptr;
 		bool mouseProviderActive_ = false;
+		float scale_ = 1.0F;
+		float appliedScale_ = 1.0F;
 	};
 
 } // namespace dl::imgui

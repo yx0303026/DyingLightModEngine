@@ -142,7 +142,7 @@ namespace dl::imgui {
 	void NavigationView::OnRender()
 	{
 		const ImVec2 available = ImGui::GetContentRegionAvail();
-		const float width = navigationWidth_ > 0.0F ? navigationWidth_ : 1.0F;
+		const float width = navigationWidth_ > 0.0F ? ScaleSize(navigationWidth_) : 1.0F;
 		const float contentWidth = std::max(0.0F, available.x - width - ImGui::GetStyle().ItemSpacing.x);
 
 		ImGui::BeginChild("##navigation_bar", ImVec2(width, available.y), false);

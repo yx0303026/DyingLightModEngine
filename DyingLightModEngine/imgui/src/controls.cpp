@@ -8,8 +8,8 @@ namespace dl::imgui {
 		ImVec2 ResolveControlSize(const LayoutOptions& layout)
 		{
 			return ImVec2(
-				layout.width >= 0.0F ? layout.width : 0.0F,
-				layout.height >= 0.0F ? layout.height : 0.0F);
+				ScaleSize(layout.width >= 0.0F ? layout.width : 0.0F),
+				ScaleSize(layout.height >= 0.0F ? layout.height : 0.0F));
 		}
 
 	} // namespace
@@ -159,7 +159,7 @@ namespace dl::imgui {
 	void ComboBox::OnRender()
 	{
 		if (GetLayout().width >= 0.0F) {
-			ImGui::SetNextItemWidth(GetLayout().width);
+			ImGui::SetNextItemWidth(ScaleSize(GetLayout().width));
 		}
 		const char* preview = selectedIndex_ >= 0 ? items_[selectedIndex_].c_str() : "";
 		if (!ImGui::BeginCombo(label_.c_str(), preview)) {
@@ -280,7 +280,7 @@ namespace dl::imgui {
 	void Slider::OnRender()
 	{
 		if (GetLayout().width >= 0.0F) {
-			ImGui::SetNextItemWidth(GetLayout().width);
+			ImGui::SetNextItemWidth(ScaleSize(GetLayout().width));
 		}
 		if (ImGui::SliderFloat(label_.c_str(), &value_, minimum_, maximum_) && changed_) {
 			changed_(value_);

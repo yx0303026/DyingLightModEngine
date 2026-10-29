@@ -55,7 +55,7 @@ namespace cheat_mod {
 		context_.BeginFrame();
 		engineMouse_.store(open && context_.IsMouseProviderActive());
 		if (open) {
-			ImGui::SetNextWindowSize(ImVec2(760.0F, 520.0F), ImGuiCond_FirstUseEver);
+			ImGui::SetNextWindowSize(dl::imgui::ScaleSize(ImVec2(760.0F, 520.0F)), ImGuiCond_FirstUseEver);
 			if (ImGui::Begin("Cheat Mod", &open, ImGuiWindowFlags_NoCollapse)) {
 				context_.Render(*navigation_);
 			}
@@ -165,6 +165,8 @@ namespace cheat_mod {
 	{
 		page.AddChild<dl::imgui::Label>("Settings");
 		page.AddChild<dl::imgui::Label>("Cheat Mod UI is rendered through the Engine ImGui facade.");
+		dl::imgui::Slider& uiScale = page.AddChild<dl::imgui::Slider>("UI scale", uiScale_, 0.5F, 2.0F);
+		uiScale.SetOnChanged(std::bind(&CheatModUi::OnUiScaleChanged, this, std::placeholders::_1));
 	}
 
 	void CheatModUi::OnGodModeChanged(bool enabled) noexcept
@@ -175,6 +177,12 @@ namespace cheat_mod {
 	void CheatModUi::OnInfiniteStaminaChanged(bool enabled) noexcept
 	{
 		infiniteStaminaEnabled_ = enabled;
+	}
+
+	void CheatModUi::OnUiScaleChanged(float scale) noexcept
+	{
+		uiScale_ = scale;
+		context_.SetScale(scale);
 	}
 
 	bool CheatModUi::InitializeGraphics(void* graphicsContext) noexcept
