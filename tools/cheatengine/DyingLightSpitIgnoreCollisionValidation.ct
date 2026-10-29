@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CheatTable CheatEngineTableVersion="45">
+  <CheatEntries>
+    <CheatEntry>
+      <ID>3</ID>
+      <Description>"验证：唾液忽略全部碰撞（不会造成命中伤害）"</Description>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+// 将 Raytrace 返回后的条件测试改为恒定未命中，仅用于确认粘附是否来自碰撞处理链。
+assert(gamedll_x64_rwdi.dll+EEBFBA,84 C0)
+gamedll_x64_rwdi.dll+EEBFBA:
+  xor al,al
+
+[DISABLE]
+// 恢复 Raytrace 返回值测试。
+assert(gamedll_x64_rwdi.dll+EEBFBA,30 C0)
+gamedll_x64_rwdi.dll+EEBFBA:
+  db 84 C0
+</AssemblerScript>
+    </CheatEntry>
+  </CheatEntries>
+</CheatTable>

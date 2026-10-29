@@ -1,0 +1,10 @@
+Database E:\SteamLibrary\steamapps\common\Dying Light\gamedll_x64_rwdi.dll.i64 already exists.
+Do you want to overwrite it? -> ~L~oad existing
+IDA has found an unpacked version of database: E:\SteamLibrary\steamapps\common\Dying Light\gamedll_x64_rwdi.dll.i64
+on the disk.
+It appears IDA did not close properly;
+it is probably safer to restart your work from the packed database -> ~R~estore packed base
+E:\SteamLibrary\steamapps\common\Dying Light\gamedll_x64_rwdi.dll.id0: Permission denied -> OK
+Database initialization failed with error 4
+Open database failed with result: 4
+ -> OK

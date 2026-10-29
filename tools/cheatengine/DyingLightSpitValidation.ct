@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CheatTable CheatEngineTableVersion="45">
+  <CheatEntries>
+    <CheatEntry>
+      <ID>1</ID>
+      <Description>"验证唾液专属碰撞入口"</Description>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+-- 验证模块、RVA 与函数入口字节；不修改游戏内存。
+local moduleName = 'gamedll_x64_rwdi.dll'
+local raytraceAddress = getAddress(moduleName .. '+EEBD30')
+local callbackAddress = getAddress(moduleName .. '+EEC176')
+local raytraceBytes = readBytes(raytraceAddress, 8, true)
+local callbackBytes = readBytes(callbackAddress, 6, true)
+local function matches(bytes, expected)
+  if not bytes or #bytes &lt; #expected then return false end
+  for i = 1, #expected do
+    if bytes[i] ~= expected[i] then return false end
+  end
+  return true
+end
+local raytraceOk = matches(raytraceBytes, {0x40, 0x55, 0x53, 0x56, 0x41, 0x56})
+local callbackOk = matches(callbackBytes, {0xFF, 0x90, 0x00, 0x04, 0x00, 0x00})
+local message = string.format('唾液验证结果\n模块: %s\nRaytrace 地址: 0x%X\n碰撞回调地址: 0x%X\nRaytrace入口: %s\n碰撞回调指令: %s', moduleName, raytraceAddress, callbackAddress, raytraceOk and '通过' or '失败', callbackOk and '通过' or '失败')
+print(message)
+showMessage(message)
+if not raytraceOk or not callbackOk then error('版本或模块不匹配，已停止验证。') end
+{$asm}
+
+[DISABLE]
+{$lua}
+-- 验证项没有修改内容，禁用时无需恢复字节。
+print('唾液验证项已关闭。')
+{$asm}
+</AssemblerScript>
+    </CheatEntry>
+  </CheatEntries>
+</CheatTable>
