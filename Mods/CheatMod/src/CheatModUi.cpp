@@ -333,7 +333,10 @@ namespace cheat_mod {
 				" E:" + std::to_string(stats.entities) + ")" +
 				" | Kind " + std::to_string(stats.kindMatches) +
 				" | Bone " + std::to_string(stats.boneMatches) +
-				" | Proj " + std::to_string(stats.projected));
+				" | Proj " + std::to_string(stats.projected) +
+				" | Aim " + (stats.aimPick != 0 ? "pick" : "enum") +
+				" r" + std::to_string(stats.aimRefined) +
+				(stats.aimCached != 0 ? " (cached)" : ""));
 		}
 	}
 

@@ -1,5 +1,6 @@
 #include "sdk/EngineEntityAbi.h"
 #include "sdk/EngineHostAbi.h"
+#include "sdk/EngineHotkeyAbi.h"
 #include "sdk/EngineModLifecycleAbi.h"
 #include "logging/EngineLogger.h"
 
@@ -15,16 +16,16 @@ namespace {
 	constexpr float kShieldFullDurationSeconds = 6.0F;
 	constexpr float kShieldFullRechargeSeconds = 20.0F;
 	constexpr std::int32_t kUnlimitedCharges = -2;
-	constexpr int kShieldToggleKey = 'V';
 	constexpr float kMaximumFrameSeconds = 0.1F;
 
 	struct ExampleModState {
 		void* hostContext = nullptr;
 		EngineLogCallback hostLog = nullptr;
 		const DlModEntityApiV1* entity = nullptr;
+		const DlModHotkeyApiV1* hotkey = nullptr;
 		bool uvShieldAvailable = false;
 		bool shieldEnabled = false;
-		bool toggleKeyDown = false;
+		bool shieldHotkeyRegistered = false;
 		bool depletionLogged = false;
 		bool hudProgressWarningLogged = false;
 		float energy = 1.0F;
@@ -100,6 +101,15 @@ namespace {
 		LogPercent(EngineLogLevel::Info, "UV shield enabled (energy %.0f%%).", state.energy);
 	}
 
+	void MODSDK_CALL OnShieldHotkey(void* userData, std::uint32_t actionId)
+	{
+		(void)actionId;
+		if (userData != &g_exampleModState) {
+			return;
+		}
+		ToggleShield();
+	}
+
 	void UpdateEnergy(float deltaSeconds)
 	{
 		ExampleModState& state = g_exampleModState;
@@ -134,12 +144,6 @@ namespace {
 		}
 		state.lastTickMs = now;
 
-		const bool keyDown = (GetAsyncKeyState(kShieldToggleKey) & 0x8000) != 0;
-		if (keyDown && !state.toggleKeyDown) {
-			ToggleShield();
-		}
-		state.toggleKeyDown = keyDown;
-
 		/* 只在 BTZ 猎手存在时消耗/恢复能量，避免战役模式空转。 */
 		if (!IsHunterActive()) {
 			return;
@@ -157,7 +161,7 @@ namespace {
 	{
 		if (modContext != &g_exampleModState ||
 			hostApi == nullptr ||
-			hostApi->structSize < sizeof(DlModHostApiV1) ||
+			hostApi->structSize < DLMOD_HOST_API_V1_MOUSE_STATE_SIZE ||
 			hostApi->abiVersion != MODSDK_ABI_VERSION ||
 			hostApi->log == nullptr) {
 			return DLMOD_RESULT_INVALID_ARGUMENT;
@@ -190,6 +194,35 @@ namespace {
 		else {
 			Log(EngineLogLevel::Warning, "Entity API does not expose UV shield control.");
 		}
+
+		if (hostApi->structSize >= DLMOD_HOST_API_V1_HOTKEY_SIZE &&
+			hostApi->hotkey != nullptr &&
+			hostApi->hotkey->structSize >= DLMOD_HOTKEY_API_V1_SIZE &&
+			hostApi->hotkey->abiVersion == DLMOD_HOTKEY_ABI_VERSION &&
+			hostApi->hotkey->registerHotkey != nullptr) {
+			DlModHotkeyDescV1 hotkey{};
+			hotkey.structSize = sizeof(hotkey);
+			hotkey.abiVersion = DLMOD_HOTKEY_ABI_VERSION;
+			hotkey.id = "example.mod.toggle_uv_shield";
+			hotkey.displayName = "Toggle UV Shield";
+			hotkey.pageTitle = "Example Mod";
+			hotkey.defaultKey = DLMOD_HOTKEY_KEY_F7;
+			hotkey.device = DLMOD_HOTKEY_DEVICE_INFER;
+			hotkey.userData = &state;
+			hotkey.callback = &OnShieldHotkey;
+			if (hostApi->hotkey->registerHotkey(&hotkey) == DLMOD_RESULT_SUCCESS) {
+				state.hotkey = hostApi->hotkey;
+				state.shieldHotkeyRegistered = true;
+				Log(EngineLogLevel::Info,
+					"UV shield hotkey registered (F7 by default, rebindable in Settings).");
+			}
+			else {
+				Log(EngineLogLevel::Warning, "UV shield hotkey registration failed.");
+			}
+		}
+		else {
+			Log(EngineLogLevel::Warning, "Hotkey API is unavailable; UV shield has no hotkey.");
+		}
 		return DLMOD_RESULT_SUCCESS;
 	}
 
@@ -200,6 +233,9 @@ namespace {
 		}
 
 		ExampleModState& state = g_exampleModState;
+		if (state.hotkey != nullptr && state.shieldHotkeyRegistered) {
+			state.hotkey->unregisterHotkey("example.mod.toggle_uv_shield");
+		}
 		if (state.entity != nullptr && state.uvShieldAvailable) {
 			state.entity->setHunterUvShield(DLMOD_HUNTER_UV_SHIELD_MODE_GAME, 0.0F);
 			state.entity->setHunterUvShieldCharges(-1);

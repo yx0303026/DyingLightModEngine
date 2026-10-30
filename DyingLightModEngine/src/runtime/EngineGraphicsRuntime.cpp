@@ -1,6 +1,7 @@
 #include "runtime/EngineGraphicsRuntime.h"
 
 #include "managers/EngineModManager.h"
+#include "runtime/EngineHotkeyRuntime.h"
 
 #include <d3d11.h>
 #include <functional>
@@ -140,5 +141,6 @@ void EngineGraphicsRuntime::RenderFrame() noexcept
 	}
 	input_.AttachSwapChain(swapChain);
 	EngineModManager::RenderFrame(swapChain);
+	EngineHotkeyRuntime::Tick();
 	input_.RefreshUiState();
 }

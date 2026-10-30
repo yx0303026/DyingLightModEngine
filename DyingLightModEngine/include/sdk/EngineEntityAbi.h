@@ -225,6 +225,62 @@ typedef struct DlModHunterSnapshotV1
 #define DLMOD_NEARBY_ENTITY_V1_BASE_SIZE \
 	((uint32_t)offsetof(DlModNearbyEntityV1, entity))
 
+	/* 准星拾取的骨骼目标：BODY 取躯干，HEAD 取头部。 */
+#define DLMOD_AIM_BONE_BODY 0u
+#define DLMOD_AIM_BONE_HEAD 1u
+	/* 允许拾取的实体种类位掩码，位序与 DlModEntityKindV1 一致。 */
+#define DLMOD_AIM_KIND_MASK(kind) (1u << (kind))
+#define DLMOD_AIM_KIND_DEFAULT \
+	(DLMOD_AIM_KIND_MASK(DLMOD_ENTITY_KIND_PLAYER) | \
+	 DLMOD_AIM_KIND_MASK(DLMOD_ENTITY_KIND_HUMAN) | \
+	 DLMOD_AIM_KIND_MASK(DLMOD_ENTITY_KIND_HUNTER) | \
+	 DLMOD_AIM_KIND_MASK(DLMOD_ENTITY_KIND_ZOMBIE))
+
+	/* 准星拾取参数：一次调用内完成角色枚举、屏幕空间预筛与骨骼精算。
+	   center 为零向量时使用当前相机位置。 */
+	typedef struct DlModAimPickOptionsV1
+	{
+		uint32_t structSize;
+		uint32_t abiVersion;
+		uint32_t boneTarget;
+		uint32_t allowedKinds;
+		DlModVector3V1 center;
+		float radius;
+		float viewportWidth;
+		float viewportHeight;
+		/* 屏幕中心裁剪半径（像素），<= 0 表示不裁剪。 */
+		float fovRadius;
+		/* 预筛后最多精算的候选数，0 表示引擎默认值。 */
+		uint32_t maxBoneReads;
+		uint32_t reserved;
+	} DlModAimPickOptionsV1;
+
+#define DLMOD_AIM_PICK_HAS_TARGET 0x00000001u
+#define DLMOD_AIM_PICK_HAS_BONE 0x00000002u
+
+	/* 准星拾取结果：boneId 可直接用于 readBoneById 做逐帧轻量追踪。 */
+	typedef struct DlModAimPickResultV1
+	{
+		uint32_t structSize;
+		uint32_t abiVersion;
+		uint32_t validFields;
+		uint32_t kind;
+		DlModEntityV1 entity;
+		DlModVector3V1 position;
+		float screenX;
+		float screenY;
+		uint32_t boneId;
+		/* 诊断计数：参与分类的对象数、通过的候选数、实际精算数。 */
+		uint32_t scanned;
+		uint32_t candidates;
+		uint32_t refined;
+		/* 1 表示本次复用了缓存的角色列表，未重新做空间查询。 */
+		uint32_t cached;
+	} DlModAimPickResultV1;
+
+#define DLMOD_AIM_PICK_OPTIONS_V1_SIZE ((uint32_t)sizeof(DlModAimPickOptionsV1))
+#define DLMOD_AIM_PICK_RESULT_V1_SIZE ((uint32_t)sizeof(DlModAimPickResultV1))
+
 	/* 本地实体查询、读取和写入应在游戏线程调用；猎手运动快照允许跨线程读取。 */
 	typedef DlModResult(MODSDK_CALL *ModEngineGetLocalEntityFn)(DlModEntityV1 *entity);
 	typedef DlModResult(MODSDK_CALL *ModEngineGetLocalPlayerFn)(DlModPlayerV1 *player);
@@ -269,6 +325,20 @@ typedef struct DlModHunterSnapshotV1
 	typedef DlModResult(MODSDK_CALL *ModEngineReadBoneByNameFn)(
 		const DlModEntityV1 *entity,
 		const char *name,
+		DlModVector3V1 *position);
+	/* 准星目标拾取：单次调用完成枚举、投影预筛与骨骼精算，供逐帧瞄准使用。 */
+	typedef DlModResult(MODSDK_CALL *ModEnginePickAimTargetFn)(
+		const DlModAimPickOptionsV1 *options,
+		DlModAimPickResultV1 *result);
+	/* 骨骼名解析：名字只查一次表，之后用 ID 重复读取。 */
+	typedef DlModResult(MODSDK_CALL *ModEngineResolveBoneIdFn)(
+		const DlModEntityV1 *entity,
+		const char *name,
+		uint8_t *boneId);
+	/* 按骨骼 ID 读取关节世界坐标，避免每次读取都做字符串查找。 */
+	typedef DlModResult(MODSDK_CALL *ModEngineReadBoneByIdFn)(
+		const DlModEntityV1 *entity,
+		uint8_t boneId,
 		DlModVector3V1 *position);
 	/* 紫外线护盾：安装状态机写入钩子、读取当前护盾状态并下发覆盖策略。 */
 	typedef DlModResult(MODSDK_CALL *ModEngineInstallUvShieldTrackingFn)(void);
@@ -327,6 +397,10 @@ typedef struct DlModHunterSnapshotV1
 		ModEngineIsDamageTrackingInstalledFn isDamageTrackingInstalled;
 		ModEngineRegisterDamageHookFn registerDamageHook;
 		ModEngineUnregisterDamageHookFn unregisterDamageHook;
+		/* 以下为向后兼容追加项，调用前请按 structSize 校验。 */
+		ModEnginePickAimTargetFn pickAimTarget;
+		ModEngineResolveBoneIdFn resolveBoneId;
+		ModEngineReadBoneByIdFn readBoneById;
 	} DlModEntityApiV1;
 
 #define DLMOD_ENTITY_API_V1_MIN_SIZE \
@@ -341,6 +415,8 @@ typedef struct DlModHunterSnapshotV1
 	((uint32_t)(offsetof(DlModEntityApiV1, setHunterUvShieldProgress) + sizeof(ModEngineSetHunterUvShieldProgressFn)))
 #define DLMOD_ENTITY_API_V1_DAMAGE_SIZE \
 	((uint32_t)(offsetof(DlModEntityApiV1, unregisterDamageHook) + sizeof(ModEngineUnregisterDamageHookFn)))
+#define DLMOD_ENTITY_API_V1_AIM_SIZE \
+	((uint32_t)(offsetof(DlModEntityApiV1, readBoneById) + sizeof(ModEngineReadBoneByIdFn)))
 
 #ifdef __cplusplus
 }

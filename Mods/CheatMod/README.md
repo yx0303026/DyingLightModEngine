@@ -7,13 +7,21 @@ Room Members, and Settings pages.
 
 The Bullet Tracking page implements projectile guidance entirely inside the
 module: it registers a frame callback and a projectile update callback through
-`DlModProjectileManagerApiV1`, locks the entity closest to the crosshair with
-`DlModEntityApiV1::enumerateNearby` / `readBoneByName`, projects bone points with
-`DlModCameraApiV1::project`, and rewrites the BulletManager velocity before the
-native update runs. Arrow, bolt and bullet records are classified by the engine
-from their visual RTTI, so bows, crossbows, guns and tracers share one path.
-Tracking only runs while a single-player session is active; the engine never
-changes projectile state on its own.
+`DlModProjectileApiV1`, locks the entity closest to the crosshair, and rewrites
+the BulletManager velocity before the native update runs. Arrow, bolt and bullet
+records are classified by the engine from their visual RTTI, so bows, crossbows,
+guns and tracers share one path. Tracking only runs while a single-player
+session is active; the engine never changes projectile state on its own.
+
+Target acquisition goes through `DlModEntityApiV1::pickAimTarget`: one engine
+call enumerates actors once, caches that actor list for 200 ms, projects every
+candidate with a single camera matrix read, re-projects only the few candidates
+nearest to the crosshair with their cached bone id, and returns the winner plus
+its bone id. Per-frame tracking then uses `readBoneById`, so no bone name lookup
+runs after the first frame. Hosts that do not expose the extended entity table
+fall back to the legacy `enumerateNearby` / `readBoneByName` /
+`DlModCameraApiV1::project` path, which is selected automatically.
+
 
 The Room List page shows room discovery results, while Room Members owns the
 current-member and history views plus clipboard/history actions. Both pages

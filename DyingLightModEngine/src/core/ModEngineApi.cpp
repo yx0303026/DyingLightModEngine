@@ -1,5 +1,6 @@
 #include "sdk/EngineApiAbi.h"
 #include "runtime/EngineHookRuntime.h"
+#include "runtime/EngineHotkeyRuntime.h"
 #include "logging/EngineLogger.h"
 
 #include <Windows.h>
@@ -178,12 +179,15 @@ namespace {
 			DlModResult loadResult = DLMOD_RESULT_INVALID_STATE;
 			const std::string* previousLoadingMod =
 				EngineHookRuntimeDetail::SetLoadingMod(&id);
+			const std::string* previousHotkeyMod =
+				EngineHotkeyRuntimeDetail::SetLoadingMod(&id);
 			try {
 				loadResult = mod->onLoad(mod->context, &hostApi);
 			}
 			catch (...) {
 				loadResult = DLMOD_RESULT_INVALID_STATE;
 			}
+			EngineHotkeyRuntimeDetail::SetLoadingMod(previousHotkeyMod);
 			EngineHookRuntimeDetail::SetLoadingMod(previousLoadingMod);
 			{
 				const ExclusiveLockGuard stateGuard(runtime.lock);
@@ -198,6 +202,7 @@ namespace {
 					if (!EngineHookRuntime::RemoveForMod(id)) {
 						EngineHookRuntime::RemoveAll();
 					}
+					EngineHotkeyRuntime::RemoveForOwner(id);
 					EngineLogger::DestroyModContext(failed->logContext);
 					logContext = nullptr;
 					runtime.mods.erase(failed);
@@ -236,6 +241,7 @@ namespace {
 				if (!EngineHookRuntime::RemoveForMod(existing->id)) {
 					return DLMOD_RESULT_INVALID_STATE;
 				}
+				EngineHotkeyRuntime::RemoveForOwner(existing->id);
 				removed = *existing;
 				runtime.mods.erase(existing);
 			}

@@ -2,14 +2,16 @@
 
 Example Mod is a small loadable mod for Dying Light Mod Engine. It demonstrates
 the Mod SDK descriptor, ABI version check, host logging callback, load and
-unload callbacks, per-frame rendering callbacks, and the entity API.
+unload callbacks, per-frame rendering callbacks, the entity API, and the
+game-native hotkey API.
 
 ## UV Shield Skill (Be the Zombie)
 
 On load the mod installs the engine's hunter UV shield hooks and turns the Night
 Hunter's UV immunity into a toggleable skill:
 
-- Press **V** to toggle the shield.
+- Press **F7** to toggle the shield (rebindable in the game's
+  Settings → Controls → Key Bindings page "Example Mod").
 - The charge number is hidden using the game's unlimited-charge sentinel.
 - The HUD progress ring tracks shield energy instead of the hunter's UV resistance.
 - A full energy bar keeps the shield up for **10 seconds**.
@@ -28,6 +30,33 @@ entity->setHunterUvShield(DLMOD_HUNTER_UV_SHIELD_MODE_OFF, 0.0F);
 
 Energy is only consumed or refilled while a Be the Zombie hunter is active, so
 the campaign is unaffected.
+
+## Native Hotkeys
+
+The example registers its toggle through `DlModHotkeyApiV1` instead of polling
+the keyboard directly. The engine injects the action, row, and page into the
+game's own key binding system, so the game UI displays and rebinds it:
+
+```cpp
+DlModHotkeyDescV1 hotkey{};
+hotkey.structSize = sizeof(hotkey);
+hotkey.abiVersion = DLMOD_HOTKEY_ABI_VERSION;
+hotkey.id = "example.mod.toggle_uv_shield";
+hotkey.displayName = "Toggle UV Shield";
+hotkey.pageTitle = "Example Mod";
+hotkey.defaultKey = DLMOD_HOTKEY_KEY_F7;
+hotkey.device = DLMOD_HOTKEY_DEVICE_INFER;
+hotkey.userData = &state;
+hotkey.callback = &OnShieldHotkey;
+
+hostApi->hotkey->registerHotkey(&hotkey);
+```
+
+Call `registerHotkey` from `onLoad`. Action IDs are allocated from the game's
+free input action slots (0..337), and the callback fires on the key-down edge
+with the resolved action ID. `getHotkeyKey` returns the currently bound key,
+`getHotkeyAction` returns the allocated action ID, and `unregisterHotkey` must
+be called from `onUnload` so the callback never points at an unloaded DLL.
 
 ## Build
 

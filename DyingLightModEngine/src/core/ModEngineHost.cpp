@@ -8,6 +8,7 @@
 #include "runtime/EngineGraphicsRuntime.h"
 #include "runtime/EngineHookRuntime.h"
 #include "runtime/EngineCameraRuntime.h"
+#include "runtime/EngineHotkeyRuntime.h"
 #include "runtime/EngineProjectileManager.h"
 #include "logging/EngineLogger.h"
 #include "managers/EngineModManager.h"
@@ -49,7 +50,8 @@ bool InitializeModEngine(HMODULE engineModule) noexcept
 		EngineHookRuntime::GetApi(),
 		EngineLobbyRuntime::GetApi(),
 		EngineProjectileManager::GetApi(),
-		EngineCameraRuntime::GetApi()
+		EngineCameraRuntime::GetApi(),
+		EngineHotkeyRuntime::GetApi()
 	};
 	if (engineApi.initialize(&hostApi) != DLMOD_RESULT_SUCCESS) {
 		OutputDebugStringA("[DyingLightModEngine] Engine initialization failed\n");
@@ -72,6 +74,7 @@ bool InitializeModEngine(HMODULE engineModule) noexcept
 		engineApi.shutdown();
 		return false;
 	}
+	EngineHotkeyRuntime::Initialize();
 	if (!g_graphicsRuntime.Initialize()) {
 		EngineLogger::Warning("DX11 graphics hook initialization failed; ImGui modules will remain unavailable.");
 	}
@@ -93,6 +96,7 @@ bool ShutdownModEngine() noexcept
 	g_graphicsRuntime.Shutdown();
 	EngineDirectInputRuntime::Uninstall();
 	EngineLobbyRuntime::Shutdown();
+	EngineHotkeyRuntime::Shutdown();
 	const DlModResult unloadResult = EngineModManager::UnloadAll();
 	if (unloadResult != DLMOD_RESULT_SUCCESS) {
 		EngineLogger::Error("Could not unload all mods; engine shutdown was cancelled.");

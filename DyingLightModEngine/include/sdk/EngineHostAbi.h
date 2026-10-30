@@ -4,6 +4,7 @@
 #include "sdk/EngineCollisionAbi.h"
 #include "sdk/EngineEntityAbi.h"
 #include "sdk/EngineHookAbi.h"
+#include "sdk/EngineHotkeyAbi.h"
 #include "sdk/EngineLobbyAbi.h"
 #include "sdk/EngineProjectileAbi.h"
 #include "sdk/EngineUiInputAbi.h"
@@ -34,6 +35,8 @@ extern "C"
 		const DlModProjectileManagerApiV1 *projectile;
 		/* 活动相机 API 不可用时为空。 */
 		const DlModCameraApiV1 *camera;
+		/* 游戏自带按键绑定系统不可用时为空。 */
+		const DlModHotkeyApiV1 *hotkey;
 	};
 
 #define DLMOD_HOST_API_V1_MOUSE_STATE_SIZE \
@@ -50,6 +53,8 @@ extern "C"
 	((uint32_t)(offsetof(DlModHostApiV1, projectile) + sizeof(const DlModProjectileManagerApiV1 *)))
 #define DLMOD_HOST_API_V1_CAMERA_SIZE \
 	((uint32_t)(offsetof(DlModHostApiV1, camera) + sizeof(const DlModCameraApiV1 *)))
+#define DLMOD_HOST_API_V1_HOTKEY_SIZE \
+	((uint32_t)(offsetof(DlModHostApiV1, hotkey) + sizeof(const DlModHotkeyApiV1 *)))
 
 #ifdef __cplusplus
 }

@@ -73,6 +73,9 @@ namespace
 	std::atomic<float> g_durationOverride{0.0F};
 	std::atomic<float> g_hudProgressRatio{-1.0F};
 	std::atomic<void *> g_hudShieldAbility{nullptr};
+	std::atomic<void *> g_hudContainer{nullptr};
+	std::atomic_bool g_hudContainerLogged = false;
+	std::atomic_uint32_t g_hudAbilityLogCount{0};
 	std::atomic_bool g_installed = false;
 	std::mutex g_installMutex;
 	LARGE_INTEGER g_counterFrequency{};
@@ -302,7 +305,16 @@ namespace
 		std::uint32_t count = 0;
 		if (ReadField(hud, 0x68, count) && count > 4)
 			ReadField(hud, 0x60 + 4 * sizeof(void *), ability);
+		g_hudContainer.store(hud, std::memory_order_release);
 		g_hudShieldAbility.store(ability, std::memory_order_release);
+		if (!g_hudContainerLogged.exchange(true, std::memory_order_acq_rel))
+		{
+			EngineLogger::Logf(
+				EngineLogLevel::Info,
+				"Hunter UV HUD container entered (count=%u, uvCandidate=%p)",
+				static_cast<unsigned int>(count),
+				ability);
+		}
 	}
 
 	void SetHunterUvShieldHudNumberVisible(void *ability, bool visible) noexcept
@@ -439,12 +451,33 @@ extern "C" void __fastcall EngineEntity_OnHunterUvShieldHudAbility(
 	if (original == nullptr)
 		return;
 
-	const bool isShieldAbility =
+	const float ratio = g_hudProgressRatio.load(std::memory_order_acquire);
+	const bool hasRatio = std::isfinite(ratio) && ratio >= 0.0F && ratio <= 1.0F;
+	std::int32_t displayedCharges = 0;
+	ReadField(data, 0x00, displayedCharges);
+	bool isShieldAbility =
 		ability != nullptr &&
 		ability == g_hudShieldAbility.load(std::memory_order_acquire);
-	const float ratio = g_hudProgressRatio.load(std::memory_order_acquire);
-	const bool useOverride = isShieldAbility &&
-		std::isfinite(ratio) && ratio >= 0.0F && ratio <= 1.0F && data != nullptr;
+	/* 无限充能哨兵是 -1；用它作为兜底识别，避免能力顺序变化导致抓错项。 */
+	if (!isShieldAbility && hasRatio && displayedCharges < 0)
+	{
+		g_hudShieldAbility.store(ability, std::memory_order_release);
+		isShieldAbility = true;
+	}
+	const bool useOverride = isShieldAbility && hasRatio && data != nullptr;
+	const std::uint32_t logIndex = g_hudAbilityLogCount.fetch_add(
+		1, std::memory_order_relaxed);
+	if (logIndex < 8)
+	{
+		EngineLogger::Logf(
+			EngineLogLevel::Info,
+			"Hunter UV HUD ability call #%u (ability=%p, charges=%d, ratio=%.3f, matched=%u)",
+			static_cast<unsigned int>(logIndex),
+			ability,
+			static_cast<int>(displayedCharges),
+			static_cast<double>(ratio),
+			isShieldAbility ? 1U : 0U);
+	}
 	if (useOverride)
 	{
 		/* data + 0x0C 是该能力项的环形进度，data + 0x14 控制图标可见性。 */
@@ -730,6 +763,9 @@ void EngineHunterUvShieldRuntime::Shutdown() noexcept
 	g_durationOverride.store(0.0F, std::memory_order_release);
 	g_hudProgressRatio.store(-1.0F, std::memory_order_release);
 	g_hudShieldAbility.store(nullptr, std::memory_order_release);
+	g_hudContainer.store(nullptr, std::memory_order_release);
+	g_hudContainerLogged.store(false, std::memory_order_release);
+	g_hudAbilityLogCount.store(0, std::memory_order_release);
 	AcquireSRWLockExclusive(&g_stateLock);
 	g_state = {};
 	ReleaseSRWLockExclusive(&g_stateLock);

@@ -22,6 +22,9 @@ namespace cheat_mod
 		/* 目标位置仍高频刷新，昂贵的场景枚举降为每秒四次。 */
 		constexpr std::uint64_t kAcquireIntervalMs = 250;
 		constexpr std::uint64_t kRefreshIntervalMs = 16;
+		/* 引擎单次拾取只需一次矩阵读取与少量骨骼读取，可以更密地获取目标；
+		   空间枚举本身仍由引擎侧按 200 毫秒缓存复用。 */
+		constexpr std::uint64_t kFastAcquireIntervalMs = 100;
 		/* 查询半径覆盖的静态物体很多，容量过小会把玩家/感染者挤出结果。 */
 		constexpr std::size_t kMaximumNearbyEntities = 256;
 		constexpr float kMinimumSpeed = 0.001F;
@@ -115,6 +118,10 @@ namespace cheat_mod
 	void CheatModBulletTracking::SetEntityApi(const DlModEntityApiV1* api) noexcept
 	{
 		entity_ = api;
+		const bool canPick =
+			api != nullptr && api->structSize >= DLMOD_ENTITY_API_V1_AIM_SIZE &&
+			api->pickAimTarget != nullptr;
+		aimPickEnabled_.store(canPick ? 1U : 0U, std::memory_order_relaxed);
 	}
 
 	bool CheatModBulletTracking::IsAvailable() const noexcept
@@ -130,6 +137,11 @@ namespace cheat_mod
 			camera_->project != nullptr &&
 			entity_->enumerateNearby != nullptr &&
 			entity_->readBoneByName != nullptr;
+	}
+
+	bool CheatModBulletTracking::HasAimPick() const noexcept
+	{
+		return aimPickEnabled_.load(std::memory_order_relaxed) != 0;
 	}
 
 	void CheatModBulletTracking::SetEnabled(bool enabled) noexcept
@@ -385,6 +397,9 @@ namespace cheat_mod
 		stats_.zombies = zombieCount_.load(std::memory_order_relaxed);
 		stats_.entities = entityCount_.load(std::memory_order_relaxed);
 		stats_.truncated = truncated_.load(std::memory_order_relaxed);
+		stats_.aimRefined = aimRefinedCount_.load(std::memory_order_relaxed);
+		stats_.aimCached = aimCachedCount_.load(std::memory_order_relaxed);
+		stats_.aimPick = aimPickEnabled_.load(std::memory_order_relaxed);
 	}
 
 	void CheatModBulletTracking::DrawOverlay() const noexcept
@@ -428,7 +443,9 @@ namespace cheat_mod
 			return "Engine projectile API unavailable";
 		if (!installed_.load(std::memory_order_relaxed))
 			return IsEnabled() ? "Hook installation failed" : "Idle";
-		return IsEnabled() ? "Tracking" : "Idle";
+		return IsEnabled()
+			? (HasAimPick() ? "Tracking (aim pick)" : "Tracking (legacy)")
+			: "Idle";
 	}
 
 	void MODSDK_CALL CheatModBulletTracking::OnProjectileUpdate(
@@ -460,8 +477,11 @@ namespace cheat_mod
 	{
 		if (!enabled_.load(std::memory_order_relaxed))
 			return;
+		const bool fast = HasAimPick();
+		const std::uint64_t acquireInterval =
+			fast ? kFastAcquireIntervalMs : kAcquireIntervalMs;
 		const std::uint64_t now = GetTickCount64();
-		if (now - lastAcquireTick_ >= kAcquireIntervalMs)
+		if (now - lastAcquireTick_ >= acquireInterval)
 		{
 			lastAcquireTick_ = now;
 			lastRefreshTick_ = now;
@@ -477,6 +497,91 @@ namespace cheat_mod
 
 	void CheatModBulletTracking::AcquireTarget() noexcept
 	{
+		if (HasAimPick())
+			AcquireTargetFast();
+		else
+			AcquireTargetLegacy();
+	}
+
+	void CheatModBulletTracking::AcquireTargetFast() noexcept
+	{
+		acquisitionCount_.fetch_add(1, std::memory_order_relaxed);
+		const float width = viewportWidth_.load(std::memory_order_relaxed);
+		const float height = viewportHeight_.load(std::memory_order_relaxed);
+		const float maximumDistance = maximumDistance_.load(
+			std::memory_order_relaxed);
+		std::uint32_t kinds = 0;
+		if (targetHuman_.load(std::memory_order_relaxed))
+		{
+			kinds |= DLMOD_AIM_KIND_MASK(DLMOD_ENTITY_KIND_HUMAN) |
+					 DLMOD_AIM_KIND_MASK(DLMOD_ENTITY_KIND_PLAYER);
+		}
+		if (targetHunter_.load(std::memory_order_relaxed))
+			kinds |= DLMOD_AIM_KIND_MASK(DLMOD_ENTITY_KIND_HUNTER);
+		if (targetZombie_.load(std::memory_order_relaxed))
+			kinds |= DLMOD_AIM_KIND_MASK(DLMOD_ENTITY_KIND_ZOMBIE);
+		if (kinds == 0 || !(width > 0.0F) || !(height > 0.0F) ||
+			!(maximumDistance > 0.0F))
+		{
+			ClearTarget();
+			return;
+		}
+
+		DlModAimPickOptionsV1 options{};
+		options.structSize = DLMOD_AIM_PICK_OPTIONS_V1_SIZE;
+		options.abiVersion = MODSDK_ABI_VERSION;
+		options.boneTarget = lockMode_.load(std::memory_order_relaxed) == 1
+								 ? DLMOD_AIM_BONE_HEAD
+								 : DLMOD_AIM_BONE_BODY;
+		options.allowedKinds = kinds;
+		options.center = {};
+		options.radius = maximumDistance;
+		options.viewportWidth = width;
+		options.viewportHeight = height;
+		options.fovRadius = fovRadius_.load(std::memory_order_relaxed);
+		options.maxBoneReads = 4;
+
+		DlModAimPickResultV1 result{};
+		result.structSize = DLMOD_AIM_PICK_RESULT_V1_SIZE;
+		result.abiVersion = MODSDK_ABI_VERSION;
+		const DlModResult status = entity_->pickAimTarget(&options, &result);
+		nearbyCount_.store(result.scanned, std::memory_order_relaxed);
+		kindCount_.store(result.candidates, std::memory_order_relaxed);
+		boneCount_.store(result.refined, std::memory_order_relaxed);
+		projectedCount_.store(result.candidates, std::memory_order_relaxed);
+		humanCount_.store(0, std::memory_order_relaxed);
+		hunterCount_.store(0, std::memory_order_relaxed);
+		zombieCount_.store(0, std::memory_order_relaxed);
+		entityCount_.store(0, std::memory_order_relaxed);
+		truncated_.store(0, std::memory_order_relaxed);
+		aimRefinedCount_.store(result.refined, std::memory_order_relaxed);
+		aimCachedCount_.store(result.cached, std::memory_order_relaxed);
+		if (status != DLMOD_RESULT_SUCCESS ||
+			(result.validFields & DLMOD_AIM_PICK_HAS_TARGET) == 0 ||
+			result.entity.instance == nullptr)
+		{
+			targetsFound_.store(0, std::memory_order_relaxed);
+			ClearTarget();
+			return;
+		}
+		targetsFound_.store(result.candidates, std::memory_order_relaxed);
+		targetEntity_.store(result.entity.instance, std::memory_order_relaxed);
+		targetKind_.store(result.kind, std::memory_order_relaxed);
+		targetX_.store(result.position.x, std::memory_order_relaxed);
+		targetY_.store(result.position.y, std::memory_order_relaxed);
+		targetZ_.store(result.position.z, std::memory_order_relaxed);
+		targetScreenX_.store(result.screenX, std::memory_order_relaxed);
+		targetScreenY_.store(result.screenY, std::memory_order_relaxed);
+		targetHasScreen_.store(true, std::memory_order_relaxed);
+		targetBoneId_.store(result.boneId, std::memory_order_relaxed);
+		targetHasBone_.store(
+			(result.validFields & DLMOD_AIM_PICK_HAS_BONE) != 0,
+			std::memory_order_relaxed);
+		targetValid_.store(true, std::memory_order_release);
+	}
+
+	void CheatModBulletTracking::AcquireTargetLegacy() noexcept
+	{
 		acquisitionCount_.fetch_add(1, std::memory_order_relaxed);
 		nearbyCount_.store(0, std::memory_order_relaxed);
 		kindCount_.store(0, std::memory_order_relaxed);
@@ -487,6 +592,8 @@ namespace cheat_mod
 		zombieCount_.store(0, std::memory_order_relaxed);
 		entityCount_.store(0, std::memory_order_relaxed);
 		truncated_.store(0, std::memory_order_relaxed);
+		aimRefinedCount_.store(0, std::memory_order_relaxed);
+		aimCachedCount_.store(0, std::memory_order_relaxed);
 		targetsFound_.store(0, std::memory_order_relaxed);
 		const float width = viewportWidth_.load(std::memory_order_relaxed);
 		const float height = viewportHeight_.load(std::memory_order_relaxed);
@@ -649,6 +756,8 @@ namespace cheat_mod
 		targetScreenX_.store(bestScreenX, std::memory_order_relaxed);
 		targetScreenY_.store(bestScreenY, std::memory_order_relaxed);
 		targetHasScreen_.store(true, std::memory_order_relaxed);
+		targetBoneId_.store(0, std::memory_order_relaxed);
+		targetHasBone_.store(false, std::memory_order_relaxed);
 		targetValid_.store(true, std::memory_order_release);
 	}
 
@@ -661,7 +770,19 @@ namespace cheat_mod
 			return;
 		const DlModEntityV1 target{ instance };
 		DlModVector3V1 point{};
-		if (!ReadTargetPoint(target, point))
+		bool resolved = false;
+		/* 引擎已给出骨骼 ID 时只按 ID 读取，避免每帧重复做骨骼名查找。 */
+		if (targetHasBone_.load(std::memory_order_relaxed) &&
+			HasAimPick() && entity_->readBoneById != nullptr)
+		{
+			const auto boneId = static_cast<std::uint8_t>(
+				targetBoneId_.load(std::memory_order_relaxed));
+			resolved = entity_->readBoneById(&target, boneId, &point) ==
+				DLMOD_RESULT_SUCCESS;
+		}
+		if (!resolved)
+			resolved = ReadTargetPoint(target, point);
+		if (!resolved)
 			return;
 		targetX_.store(point.x, std::memory_order_relaxed);
 		targetY_.store(point.y, std::memory_order_relaxed);
@@ -832,5 +953,7 @@ namespace cheat_mod
 		targetHasScreen_.store(false, std::memory_order_relaxed);
 		targetKind_.store(0, std::memory_order_relaxed);
 		targetEntity_.store(nullptr, std::memory_order_relaxed);
+		targetBoneId_.store(0, std::memory_order_relaxed);
+		targetHasBone_.store(false, std::memory_order_relaxed);
 	}
 }

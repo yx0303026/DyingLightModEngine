@@ -40,6 +40,11 @@ namespace cheat_mod
 		std::uint32_t entities = 0;
 		/* 枚举结果被容量截断时为 1。 */
 		std::uint32_t truncated = 0;
+		/* 引擎侧准星拾取：实际精算的候选数，以及是否复用了角色缓存。 */
+		std::uint32_t aimRefined = 0;
+		std::uint32_t aimCached = 0;
+		/* 1 表示当前走引擎单次拾取路径，0 表示回退到逐实体枚举。 */
+		std::uint32_t aimPick = 0;
 	};
 
 	// 子弹追踪：在引擎弹丸回调内锁定目标并修正弹道，在渲染帧绘制准星标记。
@@ -55,6 +60,8 @@ namespace cheat_mod
 		void SetCameraApi(const DlModCameraApiV1* api) noexcept;
 		void SetEntityApi(const DlModEntityApiV1* api) noexcept;
 		bool IsAvailable() const noexcept;
+		/* 引擎提供单次准星拾取时走快路径，否则回退到逐实体枚举。 */
+		bool HasAimPick() const noexcept;
 
 		void SetEnabled(bool enabled) noexcept;
 		bool IsEnabled() const noexcept;
@@ -100,6 +107,8 @@ namespace cheat_mod
 
 		void Tick() noexcept;
 		void AcquireTarget() noexcept;
+		void AcquireTargetLegacy() noexcept;
+		void AcquireTargetFast() noexcept;
 		void RefreshTargetPosition() noexcept;
 		void SteerProjectile(const DlModProjectileUpdateV1& update) noexcept;
 		bool ReadTargetPoint(const DlModEntityV1& entity, DlModVector3V1& point) noexcept;
@@ -139,6 +148,9 @@ namespace cheat_mod
 		std::atomic<float> targetScreenX_{ 0.0F };
 		std::atomic<float> targetScreenY_{ 0.0F };
 		std::atomic<bool> targetHasScreen_{ false };
+		/* 引擎拾取返回的骨骼 ID：逐帧只用 ID 重复读取，不再做字符串查找。 */
+		std::atomic<std::uint32_t> targetBoneId_{ 0 };
+		std::atomic<bool> targetHasBone_{ false };
 
 		std::atomic<std::uint32_t> updateCount_{ 0 };
 		std::atomic<std::uint32_t> candidateCount_{ 0 };
@@ -156,6 +168,9 @@ namespace cheat_mod
 		std::atomic<std::uint32_t> zombieCount_{ 0 };
 		std::atomic<std::uint32_t> entityCount_{ 0 };
 		std::atomic<std::uint32_t> truncated_{ 0 };
+		std::atomic<std::uint32_t> aimRefinedCount_{ 0 };
+		std::atomic<std::uint32_t> aimCachedCount_{ 0 };
+		std::atomic<std::uint32_t> aimPickEnabled_{ 0 };
 
 		/* 仅游戏线程访问。 */
 		std::uint64_t lastAcquireTick_ = 0;

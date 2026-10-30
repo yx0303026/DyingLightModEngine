@@ -44,6 +44,18 @@ public:
 		const DlModEntityV1 *entity,
 		const char *name,
 		DlModVector3V1 *position) noexcept;
+	/* 准星拾取：单次调用内完成枚举、预筛与骨骼精算，必须在游戏线程调用。 */
+	static DlModResult MODSDK_CALL PickAimTarget(
+		const DlModAimPickOptionsV1 *options,
+		DlModAimPickResultV1 *result) noexcept;
+	static DlModResult MODSDK_CALL ResolveBoneId(
+		const DlModEntityV1 *entity,
+		const char *name,
+		uint8_t *boneId) noexcept;
+	static DlModResult MODSDK_CALL ReadBoneById(
+		const DlModEntityV1 *entity,
+		uint8_t boneId,
+		DlModVector3V1 *position) noexcept;
 
 private:
 	static DlModResult MODSDK_CALL GetLocalEntity(DlModEntityV1 *entity) noexcept;
