@@ -103,7 +103,8 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     enable_language(ASM_MASM)
     set(DLMOD_ENTITY_TRACKING_ASM
         "src/tracking/EngineHunterTracking.asm"
-        "src/tracking/EngineHunterUvShield.asm")
+        "src/tracking/EngineHunterUvShield.asm"
+        "src/runtime/entity/damage/EngineDamage.asm")
 elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
     set(DLMOD_ENGINE_DEF "${CMAKE_CURRENT_LIST_DIR}/exports/x86.def")
     set(DLMOD_ENTITY_TRACKING_ASM "")
@@ -132,6 +133,7 @@ add_library(DyingLightModEngine SHARED
     "src/runtime/entity/EngineZombieEntity.cpp"
     "src/runtime/entity/EngineHumanEntity.cpp"
     "src/runtime/EngineEntityRuntime.cpp"
+    "src/runtime/entity/damage/EngineDamageRuntime.cpp"
     "src/runtime/EngineLobbyData.cpp"
     "src/runtime/EngineLobbyCollector.cpp"
     "src/runtime/EngineLobbyRuntime.cpp"
@@ -170,6 +172,7 @@ add_library(DyingLightModEngine SHARED
     "include/runtime/entity/EngineZombieEntity.h"
     "include/runtime/entity/EngineHumanEntity.h"
     "include/runtime/EngineEntityRuntime.h"
+    "include/runtime/entity/damage/EngineDamageRuntime.h"
     "include/runtime/EngineLobbyData.h"
     "include/runtime/EngineLobbyCollector.h"
     "include/runtime/EngineLobbyRuntime.h"

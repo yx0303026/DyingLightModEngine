@@ -38,6 +38,12 @@ public:
 	static constexpr std::uintptr_t HealthBodyOffset = 0x78;
 	static constexpr std::uintptr_t HealthBloodMaskOffset = 0x7C;
 	static constexpr std::uintptr_t HealthLastDamagerOffset = 0xB0;
+	/* CHealthModule / CAIModule 的宿主实体指针。 */
+	static constexpr std::uintptr_t HealthModuleOwnerOffset = 0x40;
+	/* HealthModule::AddDamageToBody 与 ArmorHealthModule/BodyPartsHealthModule 覆写入口。
+	   参数：rcx = HealthModule，rdx = 伤害来源实体，xmm2 = 伤害，[rsp+28h] = 伤害类型。 */
+	static constexpr std::uintptr_t HealthModuleDamageSiteRva = 0x2A2830;
+	static constexpr std::uintptr_t HealthModuleArmorDamageSiteRva = 0x279AF0;
 	static constexpr std::uintptr_t ModuleScanSize = 0x3000;
 	static constexpr std::uintptr_t HealthModuleVtableRva = 0x1455158;
 	static constexpr std::uintptr_t BodyPartsHealthModuleVtableRva = 0x1447AF0;
@@ -58,8 +64,12 @@ public:
 	static constexpr std::uintptr_t HunterUvShieldClientSiteRva = 0xDD9977;
 	static constexpr std::uintptr_t HunterUvShieldSmokeSiteRva = 0xDD87A2;
 	static constexpr std::uintptr_t HunterUvShieldGroundPoundSiteRva = 0xDDD5F9;
-	/* HUD 更新点：游戏已将猎手 UV 组件能量换算为 0..1 比例后写入进度条。 */
-	static constexpr std::uintptr_t HunterUvShieldHudRatioSiteRva = 0x567173;
+	/* HUD 能力容器更新点：每帧刷新五个猎手能力项，UVBlock 位于第 5 项。 */
+	static constexpr std::uintptr_t HunterUvShieldHudContainerSiteRva = 0x5C66C0;
+	/* HUD 能力项更新点：写入 T_AmmoCount 文本和 I_Fill 进度。 */
+	static constexpr std::uintptr_t HunterUvShieldHudAbilitySiteRva = 0x5C6B80;
+	/* IUIElement::SetVisible 的游戏导入表地址。 */
+	static constexpr std::uintptr_t UiElementSetVisibleImportRva = 0x137C500;
 
 	static HMODULE GameModule() noexcept;
 	static HMODULE EngineModule() noexcept;

@@ -1,5 +1,6 @@
 #include "runtime/EngineEntityRuntime.h"
 
+#include "runtime/entity/damage/EngineDamageRuntime.h"
 #include "runtime/EngineEntityBindings.h"
 #include "tracking/EngineHunterTrackingRuntime.h"
 #include "tracking/EngineHunterUvShieldRuntime.h"
@@ -610,7 +611,11 @@ const DlModEntityApiV1 *EngineEntityRuntime::GetApi() noexcept
 		&SetHunterUvShield,
 		&SetHunterUvShieldCharges,
 		&SetHunterUvShieldDuration,
-		&SetHunterUvShieldProgress};
+		&SetHunterUvShieldProgress,
+		&InstallDamageTracking,
+		&IsDamageTrackingInstalled,
+		&RegisterDamageHook,
+		&UnregisterDamageHook};
 #if defined(_M_X64)
 	return EngineEntityBindings::Resolve() != nullptr ? &api : nullptr;
 #else
@@ -620,6 +625,7 @@ const DlModEntityApiV1 *EngineEntityRuntime::GetApi() noexcept
 
 void EngineEntityRuntime::Shutdown() noexcept
 {
+	EngineDamageRuntime::Shutdown();
 	EngineHunterUvShieldRuntime::Shutdown();
 	EngineHunterTrackingRuntime::Shutdown();
 }
@@ -1147,6 +1153,32 @@ DlModResult MODSDK_CALL EngineEntityRuntime::SetHunterUvShieldProgress(
 	float ratio) noexcept
 {
 	return EngineHunterUvShieldRuntime::SetProgressRatio(ratio);
+}
+
+DlModResult MODSDK_CALL EngineEntityRuntime::InstallDamageTracking() noexcept
+{
+	return EngineDamageRuntime::Install()
+			   ? DLMOD_RESULT_SUCCESS
+			   : DLMOD_RESULT_UNSUPPORTED_FEATURE;
+}
+
+uint8_t MODSDK_CALL EngineEntityRuntime::IsDamageTrackingInstalled() noexcept
+{
+	return EngineDamageRuntime::IsInstalled() ? 1U : 0U;
+}
+
+DlModResult MODSDK_CALL EngineEntityRuntime::RegisterDamageHook(
+	ModEngineDamagePreHookFn pre,
+	ModEngineDamagePostHookFn post) noexcept
+{
+	return EngineDamageRuntime::RegisterHook(pre, post);
+}
+
+DlModResult MODSDK_CALL EngineEntityRuntime::UnregisterDamageHook(
+	ModEngineDamagePreHookFn pre,
+	ModEngineDamagePostHookFn post) noexcept
+{
+	return EngineDamageRuntime::UnregisterHook(pre, post);
 }
 
 DlModResult MODSDK_CALL EngineEntityRuntime::EnumerateNearby(

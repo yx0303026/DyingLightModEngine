@@ -91,4 +91,12 @@ private:
 		float seconds) noexcept;
 	static DlModResult MODSDK_CALL SetHunterUvShieldProgress(
 		float ratio) noexcept;
+	static DlModResult MODSDK_CALL InstallDamageTracking() noexcept;
+	static uint8_t MODSDK_CALL IsDamageTrackingInstalled() noexcept;
+	static DlModResult MODSDK_CALL RegisterDamageHook(
+		ModEngineDamagePreHookFn pre,
+		ModEngineDamagePostHookFn post) noexcept;
+	static DlModResult MODSDK_CALL UnregisterDamageHook(
+		ModEngineDamagePreHookFn pre,
+		ModEngineDamagePostHookFn post) noexcept;
 };

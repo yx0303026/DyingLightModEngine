@@ -21,6 +21,11 @@ extern "C"
 #define DLMOD_HUNTER_UV_HAS_SHIELD 0x00000002u
 #define DLMOD_HUNTER_UV_HAS_FLAG 0x00000004u
 #define DLMOD_HUNTER_UV_HAS_CHARGES 0x00000008u
+#define DLMOD_DAMAGE_FLAG_PRE 0x00000001u
+#define DLMOD_DAMAGE_FLAG_POST 0x00000002u
+#define DLMOD_DAMAGE_FLAG_BLOCKED 0x00000004u
+#define DLMOD_DAMAGE_FLAG_VICTIM_PLAYER 0x00000008u
+#define DLMOD_DAMAGE_FLAG_GAME_APPLIED 0x00000010u
 	typedef enum DlModEntityKindV1
 	{
 		DLMOD_ENTITY_KIND_UNKNOWN = 0,
@@ -69,6 +74,32 @@ extern "C"
 		void *stateMachine;
 		double readTimeSeconds;
 	} DlModHunterUvShieldV1;
+
+	/* 受伤事件：healthModule 为结算伤害的 CHealthModule，entity 为其宿主实体，
+	   instigator 为造成伤害的实体（可能为空，如环境伤害）。
+	   incomingDamage 是本次结算收到的原始伤害；damage 可被受伤前钩子改写，
+	   改写后的值会交给原版 HealthModule::AddDamageToBody 继续处理。
+	   appliedDamage 为受伤后钩子中的实际结算值（游戏返回值）。 */
+	typedef struct DlModDamageEventV1
+	{
+		uint32_t structSize;
+		uint32_t abiVersion;
+		uint32_t flags;
+		uint32_t damageType;
+		void *healthModule;
+		void *entity;
+		void *instigator;
+		float incomingDamage;
+		float damage;
+		float appliedDamage;
+		float healthBefore;
+		float healthAfter;
+		uint64_t sequence;
+	} DlModDamageEventV1;
+
+	/* 受伤前钩子：返回非 0 继续结算，返回 0 阻止本次受伤（原版结算被跳过）。 */
+	typedef uint8_t(MODSDK_CALL *ModEngineDamagePreHookFn)(DlModDamageEventV1 *event);
+	typedef void(MODSDK_CALL *ModEngineDamagePostHookFn)(const DlModDamageEventV1 *event);
 
 	/* 实体句柄仅持有游戏对象指针；派生句柄使用基础句柄前缀以支持向上转型。 */
 	/* C++ 使用继承表达类型关系；C 使用相同布局的嵌套结构体。 */
@@ -255,6 +286,15 @@ typedef struct DlModHunterSnapshotV1
 		float seconds);
 	typedef DlModResult(MODSDK_CALL *ModEngineSetHunterUvShieldProgressFn)(
 		float ratio);
+	/* 受伤回调：安装两个 HealthModule::AddDamageToBody 跳板，并按需注册前置/后置回调。 */
+	typedef DlModResult(MODSDK_CALL *ModEngineInstallDamageTrackingFn)(void);
+	typedef uint8_t(MODSDK_CALL *ModEngineIsDamageTrackingInstalledFn)(void);
+	typedef DlModResult(MODSDK_CALL *ModEngineRegisterDamageHookFn)(
+		ModEngineDamagePreHookFn pre,
+		ModEngineDamagePostHookFn post);
+	typedef DlModResult(MODSDK_CALL *ModEngineUnregisterDamageHookFn)(
+		ModEngineDamagePreHookFn pre,
+		ModEngineDamagePostHookFn post);
 
 	typedef struct DlModEntityApiV1
 	{
@@ -283,6 +323,10 @@ typedef struct DlModHunterSnapshotV1
 		ModEngineSetHunterUvShieldChargesFn setHunterUvShieldCharges;
 		ModEngineSetHunterUvShieldDurationFn setHunterUvShieldDuration;
 		ModEngineSetHunterUvShieldProgressFn setHunterUvShieldProgress;
+		ModEngineInstallDamageTrackingFn installDamageTracking;
+		ModEngineIsDamageTrackingInstalledFn isDamageTrackingInstalled;
+		ModEngineRegisterDamageHookFn registerDamageHook;
+		ModEngineUnregisterDamageHookFn unregisterDamageHook;
 	} DlModEntityApiV1;
 
 #define DLMOD_ENTITY_API_V1_MIN_SIZE \
@@ -295,6 +339,8 @@ typedef struct DlModHunterSnapshotV1
 	((uint32_t)(offsetof(DlModEntityApiV1, readBoneByName) + sizeof(ModEngineReadBoneByNameFn)))
 #define DLMOD_ENTITY_API_V1_UV_SHIELD_SIZE \
 	((uint32_t)(offsetof(DlModEntityApiV1, setHunterUvShieldProgress) + sizeof(ModEngineSetHunterUvShieldProgressFn)))
+#define DLMOD_ENTITY_API_V1_DAMAGE_SIZE \
+	((uint32_t)(offsetof(DlModEntityApiV1, unregisterDamageHook) + sizeof(ModEngineUnregisterDamageHookFn)))
 
 #ifdef __cplusplus
 }
