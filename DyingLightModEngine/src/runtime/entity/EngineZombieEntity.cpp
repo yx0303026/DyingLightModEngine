@@ -1,4 +1,4 @@
-#include "runtime/EngineZombieEntity.h"
+#include "runtime/entity/EngineZombieEntity.h"
 
 #include "runtime/EngineEntityRuntime.h"
 

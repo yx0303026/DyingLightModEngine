@@ -1,6 +1,6 @@
 #pragma once
 
-#include "runtime/EngineEntity.h"
+#include "runtime/entity/EngineEntity.h"
 
 class EnginePlayerEntity : public EngineEntity
 {

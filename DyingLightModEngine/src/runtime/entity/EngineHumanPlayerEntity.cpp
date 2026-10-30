@@ -1,4 +1,4 @@
-#include "runtime/EngineHumanPlayerEntity.h"
+#include "runtime/entity/EngineHumanPlayerEntity.h"
 
 #include "runtime/EngineEntityRuntime.h"
 

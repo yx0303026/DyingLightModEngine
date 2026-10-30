@@ -1,4 +1,4 @@
-#include "runtime/EngineHunterPlayerEntity.h"
+#include "runtime/entity/EngineHunterPlayerEntity.h"
 
 #include "runtime/EngineEntityRuntime.h"
 #include "runtime/EngineEntityBindings.h"
