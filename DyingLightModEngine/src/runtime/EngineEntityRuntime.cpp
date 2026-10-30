@@ -641,6 +641,189 @@ bool EngineEntityRuntime::ReadEntityHealth(
 		   ReadHealth(entity, bodyHealth, bloodMask, damager);
 }
 
+bool EngineEntityRuntime::ReadEntityHealthDetails(
+	const void *entity,
+	float &bodyHealth,
+	float &bloodMaskHealth,
+	std::uint64_t &lastDamagerPlayerNetId) noexcept
+{
+	return entity != nullptr &&
+		   ReadHealth(entity, bodyHealth, bloodMaskHealth, lastDamagerPlayerNetId);
+}
+
+bool EngineEntityRuntime::IsPlayerInstance(const void *entity) noexcept
+{
+	return IsPlayer(entity);
+}
+
+bool EngineEntityRuntime::IsHunterInstance(const void *entity) noexcept
+{
+	return IsHunter(entity);
+}
+
+bool EngineEntityRuntime::IsHumanPlayerInstance(const void *entity) noexcept
+{
+	return IsHuman(entity);
+}
+
+bool EngineEntityRuntime::IsHumanVisualInstance(const void *entity) noexcept
+{
+	return (ClassifyEntityType(entity) & EntityClassHumanVisual) != 0;
+}
+
+bool EngineEntityRuntime::IsZombieInstance(const void *entity) noexcept
+{
+	return (ClassifyEntityType(entity) & EntityClassZombieVisual) != 0;
+}
+
+std::uint8_t EngineEntityRuntime::EntityModelId(const void *entity) noexcept
+{
+	std::uint8_t modelId = 0;
+	ReadField(AsControlObject(entity), EngineEntityBindings::HunterModelIdOffset, modelId);
+	return modelId;
+}
+
+DlModEntityKindV1 EngineEntityRuntime::EntityKind(const void *entity) noexcept
+{
+	return static_cast<DlModEntityKindV1>(EntityKindOf(entity));
+}
+
+std::uint32_t EngineEntityRuntime::EntityClassFlags(const void *entity) noexcept
+{
+	return ClassifyEntityType(entity);
+}
+
+DlModResult EngineEntityRuntime::ReadSnapshotForInstance(
+	const void *entity,
+	DlModEntitySnapshotV1 *snapshot) noexcept
+{
+	if (entity == nullptr || snapshot == nullptr ||
+		snapshot->structSize < DLMOD_ENTITY_SNAPSHOT_V1_BASE_SIZE ||
+		snapshot->abiVersion != MODSDK_ABI_VERSION)
+		return DLMOD_RESULT_INVALID_ARGUMENT;
+	const EngineEntityBindings *bindings = EngineEntityBindings::Resolve();
+	return bindings == nullptr
+			   ? DLMOD_RESULT_UNSUPPORTED_FEATURE
+			   : ReadEntitySnapshot(*bindings, entity, snapshot);
+}
+
+DlModResult EngineEntityRuntime::ReadPlayerSnapshot(
+	const void *entity,
+	DlModPlayerSnapshotV1 *snapshot) noexcept
+{
+	if (entity == nullptr || snapshot == nullptr ||
+		snapshot->structSize < DLMOD_PLAYER_SNAPSHOT_V1_BASE_SIZE ||
+		snapshot->abiVersion != MODSDK_ABI_VERSION)
+		return DLMOD_RESULT_INVALID_ARGUMENT;
+	if (!IsPlayer(entity))
+		return DLMOD_RESULT_UNSUPPORTED_FEATURE;
+	const std::uint32_t size = snapshot->structSize;
+	const DlModResult result = ReadSnapshotForInstance(
+		entity, reinterpret_cast<DlModEntitySnapshotV1 *>(snapshot));
+	snapshot->playerFlags = 0;
+	snapshot->structSize = size;
+	return result;
+}
+
+DlModResult EngineEntityRuntime::ReadHumanSnapshot(
+	const void *entity,
+	DlModHumanSnapshotV1 *snapshot) noexcept
+{
+	if (entity == nullptr || snapshot == nullptr ||
+		snapshot->structSize < DLMOD_HUMAN_SNAPSHOT_V1_BASE_SIZE ||
+		snapshot->abiVersion != MODSDK_ABI_VERSION)
+		return DLMOD_RESULT_INVALID_ARGUMENT;
+	if (!IsHuman(entity))
+		return DLMOD_RESULT_UNSUPPORTED_FEATURE;
+	const std::uint32_t size = snapshot->structSize;
+	const DlModResult result = ReadSnapshotForInstance(
+		entity, reinterpret_cast<DlModEntitySnapshotV1 *>(snapshot));
+	snapshot->playerFlags = 0;
+	snapshot->humanFlags = 0;
+	snapshot->structSize = size;
+	return result;
+}
+
+DlModResult EngineEntityRuntime::ReadHunterSnapshot(
+	const void *entity,
+	DlModHunterSnapshotV1 *snapshot) noexcept
+{
+	if (entity == nullptr || snapshot == nullptr ||
+		snapshot->structSize < DLMOD_HUNTER_SNAPSHOT_V1_BASE_SIZE ||
+		snapshot->abiVersion != MODSDK_ABI_VERSION)
+		return DLMOD_RESULT_INVALID_ARGUMENT;
+	if (!IsHunter(entity))
+		return DLMOD_RESULT_UNSUPPORTED_FEATURE;
+	const std::uint32_t size = snapshot->structSize;
+	const DlModResult result = ReadSnapshotForInstance(
+		entity, reinterpret_cast<DlModEntitySnapshotV1 *>(snapshot));
+	snapshot->playerFlags = 0;
+	EngineHunterTrackingRuntime::ReadMotion(
+		AsControlObject(entity), snapshot->motion);
+	snapshot->structSize = size;
+	return result;
+}
+
+DlModResult EngineEntityRuntime::SetEntityPosition(
+	const void *entity,
+	const DlModVector3V1 *position) noexcept
+{
+	DlModEntityV1 handle{const_cast<void *>(entity)};
+	return SetPosition(&handle, position);
+}
+
+DlModResult EngineEntityRuntime::SetEntityOrientation(
+	const void *entity,
+	const DlModVector3V1 *forward,
+	const DlModVector3V1 *up) noexcept
+{
+	DlModEntityV1 handle{const_cast<void *>(entity)};
+	return SetOrientation(&handle, forward, up);
+}
+
+DlModResult EngineEntityRuntime::ReadEntityBonePosition(
+	const void *entity,
+	std::uint8_t boneId,
+	DlModVector3V1 *position) noexcept
+{
+	DlModHunterV1 handle{};
+	handle.instance = const_cast<void *>(entity);
+	return ReadBonePosition(&handle, boneId, position);
+}
+
+void *EngineEntityRuntime::ControlObjectForInstance(const void *entity) noexcept
+{
+	return AsControlObject(entity);
+}
+
+bool EngineEntityRuntime::ReadPositionForInstance(
+	const void *entity,
+	DlModVector3V1 &position) noexcept
+{
+	const EngineEntityBindings *bindings = EngineEntityBindings::Resolve();
+	return bindings != nullptr && ReadPosition(*bindings, entity, position);
+}
+
+bool EngineEntityRuntime::ReadOrientationForInstance(
+	const void *entity,
+	DlModVector3V1 &forward,
+	DlModVector3V1 &up) noexcept
+{
+	const EngineEntityBindings *bindings = EngineEntityBindings::Resolve();
+	return bindings != nullptr && ReadOrientation(*bindings, entity, forward, up);
+}
+
+bool EngineEntityRuntime::ReadModelObjectForInstance(
+	const void *entity,
+	void *&model) noexcept
+{
+	model = nullptr;
+	if (entity == nullptr)
+		return false;
+	return ReadField(entity, 0x08, model) && model != nullptr &&
+		   EngineEntityBindings::IsDerivedFrom(model, "CModelObject");
+}
+
 DlModResult MODSDK_CALL EngineEntityRuntime::GetLocalEntity(DlModEntityV1 *entity) noexcept
 {
 	if (entity == nullptr)

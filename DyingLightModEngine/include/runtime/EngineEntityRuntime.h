@@ -2,6 +2,8 @@
 
 #include "sdk/EngineEntityAbi.h"
 
+#include <cstdint>
+
 class EngineEntityRuntime final
 {
 public:
@@ -11,6 +13,27 @@ public:
 	static void *LocalEntityInstance() noexcept;
 	/* 内部使用：读取实体生命值，必须在游戏线程调用。 */
 	static bool ReadEntityHealth(const void *entity, float &bodyHealth) noexcept;
+	static bool ReadEntityHealthDetails(const void *entity, float &bodyHealth, float &bloodMaskHealth, std::uint64_t &lastDamagerPlayerNetId) noexcept;
+	/* 实体服务：供实体类复用运行时绑定与字段读取逻辑。 */
+	static bool IsPlayerInstance(const void *entity) noexcept;
+	static bool IsHunterInstance(const void *entity) noexcept;
+	static bool IsHumanPlayerInstance(const void *entity) noexcept;
+	static bool IsHumanVisualInstance(const void *entity) noexcept;
+	static bool IsZombieInstance(const void *entity) noexcept;
+	static std::uint8_t EntityModelId(const void *entity) noexcept;
+	static DlModEntityKindV1 EntityKind(const void *entity) noexcept;
+	static std::uint32_t EntityClassFlags(const void *entity) noexcept;
+	static DlModResult ReadSnapshotForInstance(const void *entity, DlModEntitySnapshotV1 *snapshot) noexcept;
+	static DlModResult ReadPlayerSnapshot(const void *entity, DlModPlayerSnapshotV1 *snapshot) noexcept;
+	static DlModResult ReadHumanSnapshot(const void *entity, DlModHumanSnapshotV1 *snapshot) noexcept;
+	static DlModResult ReadHunterSnapshot(const void *entity, DlModHunterSnapshotV1 *snapshot) noexcept;
+	static DlModResult SetEntityPosition(const void *entity, const DlModVector3V1 *position) noexcept;
+	static DlModResult SetEntityOrientation(const void *entity, const DlModVector3V1 *forward, const DlModVector3V1 *up) noexcept;
+	static DlModResult ReadEntityBonePosition(const void *entity, std::uint8_t boneId, DlModVector3V1 *position) noexcept;
+	static void *ControlObjectForInstance(const void *entity) noexcept;
+	static bool ReadPositionForInstance(const void *entity, DlModVector3V1 &position) noexcept;
+	static bool ReadOrientationForInstance(const void *entity, DlModVector3V1 &forward, DlModVector3V1 &up) noexcept;
+	static bool ReadModelObjectForInstance(const void *entity, void *&model) noexcept;
 	static DlModResult MODSDK_CALL EnumerateNearby(
 		const DlModVector3V1 *center,
 		float radius,

@@ -2,22 +2,17 @@
 
 #include "runtime/EnginePlayerEntity.h"
 
-/* 暗夜猎手玩家实体：继承玩家实体，承载猎手运动、骨骼追踪和紫外线护盾能力。 */
 class EngineHunterPlayerEntity final : public EnginePlayerEntity
 {
 public:
+	/* 暗夜猎手玩家实体：提供猎手骨骼、运动跟踪和紫外护盾能力。 */
 	explicit EngineHunterPlayerEntity(void *instance = nullptr) noexcept;
 	using EnginePlayerEntity::ReadSnapshot;
-
 	bool IsHunter() const noexcept;
 	DlModEntityKindV1 Kind() const noexcept override;
-	DlModResult ReadSnapshot(
-		DlModHunterSnapshotV1 *snapshot) const noexcept;
-	DlModResult ReadBonePosition(
-		std::uint8_t boneId,
-		DlModVector3V1 *position) const noexcept;
+	DlModResult ReadSnapshot(DlModHunterSnapshotV1 *snapshot) const noexcept;
+	DlModResult ReadBonePosition(std::uint8_t boneId, DlModVector3V1 *position) const noexcept;
 	DlModResult ReadMotion(DlModHunterMotionV1 *motion) const noexcept;
-
 	static bool IsInstance(const void *instance) noexcept;
 	static void *CurrentInstance() noexcept;
 	static bool InstallTracking() noexcept;
