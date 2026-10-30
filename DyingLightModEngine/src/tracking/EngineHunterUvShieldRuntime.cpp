@@ -15,13 +15,17 @@
 extern "C"
 {
 	void *g_engine_entity_hunter_uv_shield_timer_trampoline = nullptr;
+	void *g_engine_entity_hunter_uv_shield_drain_trampoline = nullptr;
 	void *g_engine_entity_hunter_uv_shield_client_trampoline = nullptr;
 	void *g_engine_entity_hunter_uv_shield_smoke_trampoline = nullptr;
 	void *g_engine_entity_hunter_uv_shield_ground_pound_trampoline = nullptr;
+	void *g_engine_entity_hunter_uv_shield_hud_trampoline = nullptr;
 	void EngineEntityHunterUvShieldTimerStub();
+	void EngineEntityHunterUvShieldDrainStub();
 	void EngineEntityHunterUvShieldClientStub();
 	void EngineEntityHunterUvShieldSmokeStub();
 	void EngineEntityHunterUvShieldGroundPoundStub();
+	void EngineEntityHunterUvShieldHudStub();
 }
 
 namespace
@@ -39,9 +43,17 @@ namespace
 	constexpr std::uint8_t kGroundPoundSignature[] = {
 		0xF3, 0x0F, 0x11, 0x83, 0xA4, 0x00, 0x00, 0x00,
 		0x40, 0x88, 0xB3, 0xA8, 0x00, 0x00, 0x00};
+	constexpr std::uint8_t kDrainSignature[] = {
+		0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0x48, 0x83,
+		0xEC, 0x20, 0xF3, 0x0F, 0x58, 0x49, 0x10};
+	constexpr std::uint8_t kHudRatioSignature[] = {
+		0x48, 0x8B, 0x4F, 0x78, 0x48, 0x8D, 0x55, 0xC0,
+		0xFF, 0x15, 0x77, 0x53, 0xE1, 0x00};
 	constexpr float kMaximumShieldSeconds = 3600.0F;
 	constexpr float kMaximumScale = 100.0F;
 	constexpr std::int32_t kMaximumCharges = 99;
+	constexpr std::int32_t kDisableChargeOverride = -1;
+	constexpr std::int32_t kUnlimitedChargeOverride = -2;
 
 	struct ShieldState
 	{
@@ -54,8 +66,9 @@ namespace
 	ShieldState g_state{};
 	std::atomic<std::uint32_t> g_mode{DLMOD_HUNTER_UV_SHIELD_MODE_GAME};
 	std::atomic<float> g_overrideValue{0.0F};
-	std::atomic<std::int32_t> g_chargeOverride{-1};
+	std::atomic<std::int32_t> g_chargeOverride{kDisableChargeOverride};
 	std::atomic<float> g_durationOverride{0.0F};
+	std::atomic<float> g_hudProgressRatio{-1.0F};
 	std::atomic_bool g_installed = false;
 	std::mutex g_installMutex;
 	LARGE_INTEGER g_counterFrequency{};
@@ -152,13 +165,15 @@ namespace
 		if (stateMachine == nullptr)
 			return;
 		const std::int32_t charges = g_chargeOverride.load(std::memory_order_acquire);
-		if (charges < 0)
+		if (charges == kDisableChargeOverride)
 			return;
+		const std::int32_t storedCharges =
+			charges == kUnlimitedChargeOverride ? -1 : charges;
 		__try
 		{
 			*reinterpret_cast<std::int32_t*>(
 				static_cast<std::uint8_t*>(stateMachine) +
-				EngineEntityBindings::ZombieStateMachineSmokeChargesOffset) = charges;
+				EngineEntityBindings::ZombieStateMachineSmokeChargesOffset) = storedCharges;
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER)
 		{
@@ -302,6 +317,27 @@ extern "C" float EngineEntity_OnHunterUvShieldGroundPound(
 	return ApplyDurationOverride(duration);
 }
 
+/* 护盾激活时把猎手 UV 能量的负向变化（紫外线扣减）压成 0，等于真正免疫紫外线。 */
+extern "C" float EngineEntity_OnHunterUvShieldDrain(
+	void* component,
+	std::uint32_t deltaBits) noexcept
+{
+	const float delta = BitsToFloat(deltaBits);
+	if (component == nullptr || !std::isfinite(delta) || delta >= 0.0F)
+		return delta;
+	if (g_mode.load(std::memory_order_acquire) != DLMOD_HUNTER_UV_SHIELD_MODE_PIN)
+		return delta;
+	if (g_overrideValue.load(std::memory_order_acquire) <= 0.0F)
+		return delta;
+	/* 该入口就是猎手 UV 组件的能量更新函数，避免依赖易失效的 owner 反查。 */
+	return 0.0F;
+}
+
+extern "C" float EngineEntity_GetHunterUvShieldHudRatio() noexcept
+{
+	return g_hudProgressRatio.load(std::memory_order_acquire);
+}
+
 bool EngineHunterUvShieldRuntime::Install() noexcept
 {
 #if !defined(_M_X64)
@@ -324,6 +360,8 @@ bool EngineHunterUvShieldRuntime::Install() noexcept
 					  EngineEntityBindings::HunterUvShieldSmokeSiteRva;
 	void *groundPoundSite = reinterpret_cast<std::uint8_t *>(game) +
 							EngineEntityBindings::HunterUvShieldGroundPoundSiteRva;
+	void *hudRatioSite = reinterpret_cast<std::uint8_t *>(game) +
+						 EngineEntityBindings::HunterUvShieldHudRatioSiteRva;
 	if (std::memcmp(
 			updateSite, kTimerSignature, sizeof(kTimerSignature)) != 0 ||
 		std::memcmp(
@@ -391,16 +429,92 @@ bool EngineHunterUvShieldRuntime::Install() noexcept
 	g_engine_entity_hunter_uv_shield_smoke_trampoline = smokeTrampoline;
 	g_engine_entity_hunter_uv_shield_ground_pound_trampoline = groundPoundTrampoline;
 
+	if (std::memcmp(
+			hudRatioSite, kHudRatioSignature, sizeof(kHudRatioSignature)) == 0)
+	{
+		void *hudTrampoline = nullptr;
+		if (CreateHook(
+				hudRatioSite,
+				reinterpret_cast<void *>(&EngineEntityHunterUvShieldHudStub),
+				&hudTrampoline,
+				"HudHunterInfo progress"))
+		{
+			g_engine_entity_hunter_uv_shield_hud_trampoline = hudTrampoline;
+			if (MH_EnableHook(hudRatioSite) != MH_OK)
+			{
+				g_engine_entity_hunter_uv_shield_hud_trampoline = nullptr;
+				MH_RemoveHook(hudRatioSite);
+				EngineLogger::Warning(
+					"Hunter UV shield HUD hook failed; native progress remains active");
+			}
+		}
+		else
+		{
+			EngineLogger::Warning(
+				"Hunter UV shield HUD hook failed; native progress remains active");
+		}
+	}
+	else
+	{
+		EngineLogger::Warning(
+			"Hunter UV shield HUD site did not match; native progress remains active");
+	}
+
+	/* 能量扣减入口是可选钩子：签名不符或挂接失败只会失去真实免疫，HUD 计时仍然工作。 */
+	void* drainSite = reinterpret_cast<std::uint8_t*>(game) +
+		EngineEntityBindings::HunterUvDrainSiteRva;
+	if (std::memcmp(drainSite, kDrainSignature, sizeof(kDrainSignature)) == 0)
+	{
+		void* drainTrampoline = nullptr;
+		if (CreateHook(
+			drainSite,
+			reinterpret_cast<void*>(&EngineEntityHunterUvShieldDrainStub),
+			&drainTrampoline,
+			"uv drain"))
+		{
+			g_engine_entity_hunter_uv_shield_drain_trampoline = drainTrampoline;
+			if (MH_EnableHook(drainSite) != MH_OK)
+			{
+				g_engine_entity_hunter_uv_shield_drain_trampoline = nullptr;
+				MH_RemoveHook(drainSite);
+				EngineLogger::Warning(
+					"Hunter UV shield drain hook failed; UV drain will not be blocked");
+			}
+		}
+		else
+		{
+			EngineLogger::Warning(
+				"Hunter UV shield drain hook failed; UV drain will not be blocked");
+		}
+	}
+	else
+	{
+		EngineLogger::Warning(
+			"Hunter UV shield drain site did not match; UV drain will not be blocked");
+	}
+
 	if (MH_EnableHook(updateSite) != MH_OK ||
 		MH_EnableHook(clientSite) != MH_OK ||
 		MH_EnableHook(smokeSite) != MH_OK ||
 		MH_EnableHook(groundPoundSite) != MH_OK)
 	{
 		RemoveHooks(updateSite, clientSite, smokeSite, groundPoundSite);
+		if (g_engine_entity_hunter_uv_shield_hud_trampoline != nullptr)
+		{
+			MH_DisableHook(hudRatioSite);
+			MH_RemoveHook(hudRatioSite);
+		}
+		if (g_engine_entity_hunter_uv_shield_drain_trampoline != nullptr)
+		{
+			MH_DisableHook(drainSite);
+			MH_RemoveHook(drainSite);
+		}
 		g_engine_entity_hunter_uv_shield_timer_trampoline = nullptr;
+		g_engine_entity_hunter_uv_shield_drain_trampoline = nullptr;
 		g_engine_entity_hunter_uv_shield_client_trampoline = nullptr;
 		g_engine_entity_hunter_uv_shield_smoke_trampoline = nullptr;
 		g_engine_entity_hunter_uv_shield_ground_pound_trampoline = nullptr;
+		g_engine_entity_hunter_uv_shield_hud_trampoline = nullptr;
 		return false;
 	}
 	g_installed.store(true, std::memory_order_release);
@@ -422,6 +536,21 @@ void EngineHunterUvShieldRuntime::Shutdown() noexcept
 		const HMODULE game = EngineEntityBindings::GameModule();
 		if (game != nullptr)
 		{
+			if (g_engine_entity_hunter_uv_shield_hud_trampoline != nullptr)
+			{
+				void *hudRatioSite = reinterpret_cast<std::uint8_t *>(game) +
+					EngineEntityBindings::HunterUvShieldHudRatioSiteRva;
+				MH_DisableHook(hudRatioSite);
+				MH_RemoveHook(hudRatioSite);
+			}
+			if (g_engine_entity_hunter_uv_shield_drain_trampoline != nullptr)
+			{
+				void* drainSite = reinterpret_cast<std::uint8_t*>(game) +
+					EngineEntityBindings::HunterUvDrainSiteRva;
+				MH_DisableHook(drainSite);
+				MH_RemoveHook(drainSite);
+			}
+
 			RemoveHooks(
 				reinterpret_cast<std::uint8_t *>(game) +
 					EngineEntityBindings::HunterUvShieldUpdateSiteRva,
@@ -434,11 +563,14 @@ void EngineHunterUvShieldRuntime::Shutdown() noexcept
 		}
 	}
 	g_engine_entity_hunter_uv_shield_timer_trampoline = nullptr;
+	g_engine_entity_hunter_uv_shield_drain_trampoline = nullptr;
 	g_engine_entity_hunter_uv_shield_client_trampoline = nullptr;
 	g_engine_entity_hunter_uv_shield_smoke_trampoline = nullptr;
 	g_engine_entity_hunter_uv_shield_ground_pound_trampoline = nullptr;
-	g_chargeOverride.store(-1, std::memory_order_release);
+	g_engine_entity_hunter_uv_shield_hud_trampoline = nullptr;
+	g_chargeOverride.store(kDisableChargeOverride, std::memory_order_release);
 	g_durationOverride.store(0.0F, std::memory_order_release);
+	g_hudProgressRatio.store(-1.0F, std::memory_order_release);
 	AcquireSRWLockExclusive(&g_stateLock);
 	g_state = {};
 	ReleaseSRWLockExclusive(&g_stateLock);
@@ -523,12 +655,27 @@ DlModResult EngineHunterUvShieldRuntime::SetOverride(
 
 DlModResult EngineHunterUvShieldRuntime::SetChargeOverride(int32_t charges) noexcept
 {
-	if (charges < -1 || charges > kMaximumCharges)
+	if ((charges < 0 && charges != kDisableChargeOverride &&
+		 charges != kUnlimitedChargeOverride) ||
+		charges > kMaximumCharges)
 		return DLMOD_RESULT_INVALID_ARGUMENT;
 	g_chargeOverride.store(charges, std::memory_order_release);
 	return g_installed.load(std::memory_order_acquire)
 			   ? DLMOD_RESULT_SUCCESS
 			   : DLMOD_RESULT_INVALID_STATE;
+}
+
+DlModResult EngineHunterUvShieldRuntime::SetProgressRatio(float ratio) noexcept
+{
+	if (!std::isfinite(ratio) || ratio < -1.0F || ratio > 1.0F)
+		return DLMOD_RESULT_INVALID_ARGUMENT;
+	if (!g_installed.load(std::memory_order_acquire) ||
+		g_engine_entity_hunter_uv_shield_hud_trampoline == nullptr)
+	{
+		return DLMOD_RESULT_UNSUPPORTED_FEATURE;
+	}
+	g_hudProgressRatio.store(ratio, std::memory_order_release);
+	return DLMOD_RESULT_SUCCESS;
 }
 
 DlModResult EngineHunterUvShieldRuntime::SetDurationOverride(float seconds) noexcept

@@ -19,10 +19,11 @@ namespace cheat_mod
 		constexpr float kMarkerRadius = 7.0F;
 		constexpr float kMarkerThickness = 2.0F;
 
-		constexpr std::uint64_t kAcquireIntervalMs = 100;
+		/* 目标位置仍高频刷新，昂贵的场景枚举降为每秒四次。 */
+		constexpr std::uint64_t kAcquireIntervalMs = 250;
 		constexpr std::uint64_t kRefreshIntervalMs = 16;
 		/* 查询半径覆盖的静态物体很多，容量过小会把玩家/感染者挤出结果。 */
-		constexpr std::size_t kMaximumNearbyEntities = 1024;
+		constexpr std::size_t kMaximumNearbyEntities = 256;
 		constexpr float kMinimumSpeed = 0.001F;
 		constexpr float kMaximumDeltaSeconds = 0.1F;
 		constexpr float kMinimumTurnRadius = 0.0F;

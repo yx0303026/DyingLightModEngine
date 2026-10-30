@@ -9,8 +9,9 @@ unload callbacks, per-frame rendering callbacks, and the entity API.
 On load the mod installs the engine's hunter UV shield hooks and turns the Night
 Hunter's UV immunity into a toggleable skill:
 
-- Press **F3** to toggle the shield.
-- Charges are removed (`setHunterUvShieldCharges(99)` re-pinned every frame).
+- Press **V** to toggle the shield.
+- The charge number is hidden using the game's unlimited-charge sentinel.
+- The HUD progress ring tracks shield energy instead of the hunter's UV resistance.
 - A full energy bar keeps the shield up for **10 seconds**.
 - While the shield is off the bar recharges from empty to full in **15 seconds**.
 - When energy reaches zero the shield switches off automatically and recharges.
@@ -19,7 +20,8 @@ The mod drives the engine through `DlModEntityApiV1`:
 
 ```cpp
 entity->installUvShieldTracking();
-entity->setHunterUvShieldCharges(99);
+entity->setHunterUvShieldCharges(-2);
+entity->setHunterUvShieldProgress(energy);
 entity->setHunterUvShield(DLMOD_HUNTER_UV_SHIELD_MODE_PIN, energy * 10.0F);
 entity->setHunterUvShield(DLMOD_HUNTER_UV_SHIELD_MODE_OFF, 0.0F);
 ```

@@ -12,10 +12,10 @@
 namespace {
 
 	/* 紫外线护盾改为可开关技能：满能量维持 10 秒，关闭后 15 秒回满，充能次数不再受限。 */
-	constexpr float kShieldFullDurationSeconds = 10.0F;
-	constexpr float kShieldFullRechargeSeconds = 15.0F;
-	constexpr std::int32_t kUnlimitedCharges = 99;
-	constexpr int kShieldToggleKey = VK_F3;
+	constexpr float kShieldFullDurationSeconds = 6.0F;
+	constexpr float kShieldFullRechargeSeconds = 20.0F;
+	constexpr std::int32_t kUnlimitedCharges = -2;
+	constexpr int kShieldToggleKey = 'V';
 	constexpr float kMaximumFrameSeconds = 0.1F;
 
 	struct ExampleModState {
@@ -26,6 +26,7 @@ namespace {
 		bool shieldEnabled = false;
 		bool toggleKeyDown = false;
 		bool depletionLogged = false;
+		bool hudProgressWarningLogged = false;
 		float energy = 1.0F;
 		ULONGLONG lastTickMs = 0;
 	};
@@ -144,6 +145,11 @@ namespace {
 			return;
 		}
 		UpdateEnergy(deltaSeconds);
+		if (state.entity->setHunterUvShieldProgress(state.energy) != DLMOD_RESULT_SUCCESS &&
+			!state.hudProgressWarningLogged) {
+			state.hudProgressWarningLogged = true;
+			Log(EngineLogLevel::Warning, "UV shield HUD progress hook is unavailable.");
+		}
 		ApplyShieldState();
 	}
 
@@ -169,12 +175,13 @@ namespace {
 		if (hostApi->structSize >= DLMOD_HOST_API_V1_ENTITY_SIZE &&
 			hostApi->entity != nullptr &&
 			hostApi->entity->structSize >= DLMOD_ENTITY_API_V1_UV_SHIELD_SIZE &&
-			hostApi->entity->installUvShieldTracking != nullptr) {
+			hostApi->entity->installUvShieldTracking != nullptr &&
+			hostApi->entity->setHunterUvShieldProgress != nullptr) {
 			state.entity = hostApi->entity;
 			state.uvShieldAvailable =
 				state.entity->installUvShieldTracking() == DLMOD_RESULT_SUCCESS;
 			if (state.uvShieldAvailable) {
-				Log(EngineLogLevel::Info, "UV shield hooks installed. Press F3 to toggle.");
+				Log(EngineLogLevel::Info, "UV shield hooks installed. Press V to toggle.");
 			}
 			else {
 				Log(EngineLogLevel::Warning, "UV shield hooks are unavailable for this game build.");
@@ -197,6 +204,7 @@ namespace {
 			state.entity->setHunterUvShield(DLMOD_HUNTER_UV_SHIELD_MODE_GAME, 0.0F);
 			state.entity->setHunterUvShieldCharges(-1);
 			state.entity->setHunterUvShieldDuration(0.0F);
+			state.entity->setHunterUvShieldProgress(-1.0F);
 		}
 
 		if (state.hostLog != nullptr) {

@@ -13,4 +13,5 @@ public:
 	static DlModResult SetOverride(uint32_t mode, float value) noexcept;
 	static DlModResult SetChargeOverride(int32_t charges) noexcept;
 	static DlModResult SetDurationOverride(float seconds) noexcept;
+	static DlModResult SetProgressRatio(float ratio) noexcept;
 };

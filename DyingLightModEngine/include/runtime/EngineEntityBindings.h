@@ -49,11 +49,17 @@ public:
 	static constexpr std::uintptr_t ZombieStateMachineShieldSecondsOffset = 0xA4;
 	static constexpr std::uintptr_t ZombieStateMachineShieldFlagOffset = 0xA8;
 	static constexpr std::uintptr_t ZombieStateMachineSmokeChargesOffset = 0x70;
+	/* 猎手 UV 组件：+0x10 为 UV 能量（被紫外线手电消耗），挂在玩家对象 +0x1348。 */
+	static constexpr std::uintptr_t HunterUvComponentOffset = 0x1348;
+	/* 紫外线对 UV 能量的增减入口 sub_180CE1410。 */
+	static constexpr std::uintptr_t HunterUvDrainSiteRva = 0xCE1410;
 	/* 状态机写入光免疫计时的四处指令（护盾递减、客户端递减、防御烟雾、捶地）。 */
 	static constexpr std::uintptr_t HunterUvShieldUpdateSiteRva = 0xDD98BD;
 	static constexpr std::uintptr_t HunterUvShieldClientSiteRva = 0xDD9977;
 	static constexpr std::uintptr_t HunterUvShieldSmokeSiteRva = 0xDD87A2;
 	static constexpr std::uintptr_t HunterUvShieldGroundPoundSiteRva = 0xDDD5F9;
+	/* HUD 更新点：游戏已将猎手 UV 组件能量换算为 0..1 比例后写入进度条。 */
+	static constexpr std::uintptr_t HunterUvShieldHudRatioSiteRva = 0x567173;
 
 	static HMODULE GameModule() noexcept;
 	static HMODULE EngineModule() noexcept;

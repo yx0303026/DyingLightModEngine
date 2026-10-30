@@ -66,4 +66,6 @@ private:
 		int32_t charges) noexcept;
 	static DlModResult MODSDK_CALL SetHunterUvShieldDuration(
 		float seconds) noexcept;
+	static DlModResult MODSDK_CALL SetHunterUvShieldProgress(
+		float ratio) noexcept;
 };

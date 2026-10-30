@@ -253,6 +253,8 @@ typedef struct DlModHunterSnapshotV1
 		int32_t charges);
 	typedef DlModResult(MODSDK_CALL *ModEngineSetHunterUvShieldDurationFn)(
 		float seconds);
+	typedef DlModResult(MODSDK_CALL *ModEngineSetHunterUvShieldProgressFn)(
+		float ratio);
 
 	typedef struct DlModEntityApiV1
 	{
@@ -280,6 +282,7 @@ typedef struct DlModHunterSnapshotV1
 		ModEngineSetHunterUvShieldFn setHunterUvShield;
 		ModEngineSetHunterUvShieldChargesFn setHunterUvShieldCharges;
 		ModEngineSetHunterUvShieldDurationFn setHunterUvShieldDuration;
+		ModEngineSetHunterUvShieldProgressFn setHunterUvShieldProgress;
 	} DlModEntityApiV1;
 
 #define DLMOD_ENTITY_API_V1_MIN_SIZE \
@@ -291,7 +294,7 @@ typedef struct DlModHunterSnapshotV1
 #define DLMOD_ENTITY_API_V1_BONE_NAME_SIZE \
 	((uint32_t)(offsetof(DlModEntityApiV1, readBoneByName) + sizeof(ModEngineReadBoneByNameFn)))
 #define DLMOD_ENTITY_API_V1_UV_SHIELD_SIZE \
-	((uint32_t)(offsetof(DlModEntityApiV1, setHunterUvShieldDuration) + sizeof(ModEngineSetHunterUvShieldDurationFn)))
+	((uint32_t)(offsetof(DlModEntityApiV1, setHunterUvShieldProgress) + sizeof(ModEngineSetHunterUvShieldProgressFn)))
 
 #ifdef __cplusplus
 }

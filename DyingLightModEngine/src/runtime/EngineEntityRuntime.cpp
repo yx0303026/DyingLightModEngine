@@ -609,7 +609,8 @@ const DlModEntityApiV1 *EngineEntityRuntime::GetApi() noexcept
 		&ReadHunterUvShield,
 		&SetHunterUvShield,
 		&SetHunterUvShieldCharges,
-		&SetHunterUvShieldDuration};
+		&SetHunterUvShieldDuration,
+		&SetHunterUvShieldProgress};
 #if defined(_M_X64)
 	return EngineEntityBindings::Resolve() != nullptr ? &api : nullptr;
 #else
@@ -957,6 +958,12 @@ DlModResult MODSDK_CALL EngineEntityRuntime::SetHunterUvShieldDuration(
 	float seconds) noexcept
 {
 	return EngineHunterUvShieldRuntime::SetDurationOverride(seconds);
+}
+
+DlModResult MODSDK_CALL EngineEntityRuntime::SetHunterUvShieldProgress(
+	float ratio) noexcept
+{
+	return EngineHunterUvShieldRuntime::SetProgressRatio(ratio);
 }
 
 DlModResult MODSDK_CALL EngineEntityRuntime::EnumerateNearby(
