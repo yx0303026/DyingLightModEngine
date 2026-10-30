@@ -28,6 +28,11 @@ namespace cheat_mod
 		std::uint32_t directionFailures = 0;
 		std::uint32_t acquisitions = 0;
 		std::uint32_t targetsFound = 0;
+		/* 目标获取各阶段计数，用于定位“Targets 0”的失败环节。 */
+		std::uint32_t nearby = 0;
+		std::uint32_t kindMatches = 0;
+		std::uint32_t boneMatches = 0;
+		std::uint32_t projected = 0;
 	};
 
 	// 子弹追踪：在引擎弹丸回调内锁定目标并修正弹道，在渲染帧绘制准星标记。
@@ -135,6 +140,10 @@ namespace cheat_mod
 		std::atomic<std::uint32_t> directionFailureCount_{ 0 };
 		std::atomic<std::uint32_t> acquisitionCount_{ 0 };
 		std::atomic<std::uint32_t> targetsFound_{ 0 };
+		std::atomic<std::uint32_t> nearbyCount_{ 0 };
+		std::atomic<std::uint32_t> kindCount_{ 0 };
+		std::atomic<std::uint32_t> boneCount_{ 0 };
+		std::atomic<std::uint32_t> projectedCount_{ 0 };
 
 		/* 仅游戏线程访问。 */
 		std::uint64_t lastAcquireTick_ = 0;

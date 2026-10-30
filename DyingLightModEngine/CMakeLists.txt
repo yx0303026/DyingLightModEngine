@@ -101,7 +101,9 @@ target_link_libraries(DyingLightModEngineImGui PUBLIC DearImGui PRIVATE minhook)
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     set(DLMOD_ENGINE_DEF "${CMAKE_CURRENT_LIST_DIR}/exports/x64.def")
     enable_language(ASM_MASM)
-    set(DLMOD_ENTITY_TRACKING_ASM "src/tracking/EngineHunterTracking.asm")
+    set(DLMOD_ENTITY_TRACKING_ASM
+        "src/tracking/EngineHunterTracking.asm"
+        "src/tracking/EngineHunterUvShield.asm")
 elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
     set(DLMOD_ENGINE_DEF "${CMAKE_CURRENT_LIST_DIR}/exports/x86.def")
     set(DLMOD_ENTITY_TRACKING_ASM "")
@@ -131,6 +133,7 @@ add_library(DyingLightModEngine SHARED
     "src/runtime/ui/PakUiBackend.cpp"
     "src/runtime/ui/EngineUiRuntime.cpp"
     "src/tracking/EngineHunterTrackingRuntime.cpp"
+    "src/tracking/EngineHunterUvShieldRuntime.cpp"
     "${DLMOD_ENTITY_TRACKING_ASM}"
     "include/core/EngineHost.h"
     "include/sdk/EngineAbiTypes.h"
@@ -163,6 +166,7 @@ add_library(DyingLightModEngine SHARED
     "include/runtime/ui/PakUiBackend.h"
     "include/runtime/ui/EngineUiRuntime.h"
     "include/tracking/EngineHunterTrackingRuntime.h"
+    "include/tracking/EngineHunterUvShieldRuntime.h"
     "include/tracking/EngineHunterMotionTracker.h"
     "src/tracking/EngineHunterMotionTracker.cpp"
     "${DLMOD_ENGINE_DEF}"

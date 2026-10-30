@@ -10,13 +10,13 @@ namespace
 
 }
 
-EngineLobbyData& EngineLobbyData::Instance() noexcept
+EngineLobbyData &EngineLobbyData::Instance() noexcept
 {
 	static EngineLobbyData instance;
 	return instance;
 }
 
-void EngineLobbyData::ResetLobby(const char* lobbyId) noexcept
+void EngineLobbyData::ResetLobby(const char *lobbyId) noexcept
 {
 	const std::unique_lock<std::shared_mutex> lock(mutex_);
 	const std::string nextId = lobbyId == nullptr ? std::string{} : std::string(lobbyId);
@@ -32,9 +32,9 @@ void EngineLobbyData::ResetLobby(const char* lobbyId) noexcept
 }
 
 void EngineLobbyData::SetLobbyMetadata(
-	const char* lobbyId,
-	const char* ownerName,
-	const char* ownerSteamId,
+	const char *lobbyId,
+	const char *ownerName,
+	const char *ownerSteamId,
 	std::uint32_t reportedPlayerCount) noexcept
 {
 	const std::unique_lock<std::shared_mutex> lock(mutex_);
@@ -52,7 +52,7 @@ void EngineLobbyData::SetLobbyMetadata(
 	++sequence_;
 }
 
-void EngineLobbyData::ReplaceCurrent(const std::vector<EngineLobbyMemberRecord>& members) noexcept
+void EngineLobbyData::ReplaceCurrent(const std::vector<EngineLobbyMemberRecord> &members) noexcept
 {
 	const std::unique_lock<std::shared_mutex> lock(mutex_);
 	current_ = members;
@@ -60,15 +60,15 @@ void EngineLobbyData::ReplaceCurrent(const std::vector<EngineLobbyMemberRecord>&
 	++sequence_;
 }
 
-void EngineLobbyData::MergeHistory(const std::vector<EngineLobbyMemberRecord>& members) noexcept
+void EngineLobbyData::MergeHistory(const std::vector<EngineLobbyMemberRecord> &members) noexcept
 {
 	const std::unique_lock<std::shared_mutex> lock(mutex_);
-	for (const EngineLobbyMemberRecord& source : members)
+	for (const EngineLobbyMemberRecord &source : members)
 	{
 		if (source.puid.empty())
 			continue;
-		EngineLobbyMemberRecord* destination = nullptr;
-		for (EngineLobbyMemberRecord& item : history_)
+		EngineLobbyMemberRecord *destination = nullptr;
+		for (EngineLobbyMemberRecord &item : history_)
 		{
 			if (item.puid == source.puid)
 			{
@@ -94,12 +94,12 @@ void EngineLobbyData::MergeHistory(const std::vector<EngineLobbyMemberRecord>& m
 	++sequence_;
 }
 
-void EngineLobbyData::AddRoom(const EngineLobbyRoomRecord& room) noexcept
+void EngineLobbyData::AddRoom(const EngineLobbyRoomRecord &room) noexcept
 {
 	if (room.lobbyId.empty())
 		return;
 	const std::unique_lock<std::shared_mutex> lock(mutex_);
-	for (EngineLobbyRoomRecord& item : rooms_)
+	for (EngineLobbyRoomRecord &item : rooms_)
 	{
 		if (item.lobbyId == room.lobbyId)
 		{
@@ -132,9 +132,9 @@ void EngineLobbyData::ClearHistory() noexcept
 }
 
 void EngineLobbyData::CopyText(
-	char* destination,
+	char *destination,
 	std::size_t capacity,
-	const std::string& value) noexcept
+	const std::string &value) noexcept
 {
 	if (destination == nullptr || capacity == 0)
 		return;
@@ -144,8 +144,8 @@ void EngineLobbyData::CopyText(
 }
 
 bool EngineLobbyData::CopyMember(
-	DlModLobbyMemberV1& destination,
-	const EngineLobbyMemberRecord& source) noexcept
+	DlModLobbyMemberV1 &destination,
+	const EngineLobbyMemberRecord &source) noexcept
 {
 	std::memset(&destination, 0, sizeof(destination));
 	destination.structSize = sizeof(destination);
@@ -159,8 +159,8 @@ bool EngineLobbyData::CopyMember(
 }
 
 bool EngineLobbyData::CopyRoom(
-	DlModLobbyRoomV1& destination,
-	const EngineLobbyRoomRecord& source) noexcept
+	DlModLobbyRoomV1 &destination,
+	const EngineLobbyRoomRecord &source) noexcept
 {
 	std::memset(&destination, 0, sizeof(destination));
 	destination.structSize = sizeof(destination);
@@ -170,7 +170,7 @@ bool EngineLobbyData::CopyRoom(
 	return true;
 }
 
-DlModResult EngineLobbyData::Capture(DlModLobbySnapshotV1* snapshot) const noexcept
+DlModResult EngineLobbyData::Capture(DlModLobbySnapshotV1 *snapshot) const noexcept
 {
 	if (snapshot == nullptr || snapshot->structSize < DLMOD_LOBBY_SNAPSHOT_V1_BASE_SIZE ||
 		snapshot->abiVersion != MODSDK_ABI_VERSION)
@@ -233,4 +233,3 @@ DlModResult EngineLobbyData::Capture(DlModLobbySnapshotV1* snapshot) const noexc
 	std::memcpy(snapshot, &result, copySize);
 	return result.truncatedFlags == 0U ? DLMOD_RESULT_SUCCESS : DLMOD_RESULT_PARTIAL_SUCCESS;
 }
-

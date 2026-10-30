@@ -374,6 +374,10 @@ namespace cheat_mod
 			std::memory_order_relaxed);
 		stats_.acquisitions = acquisitionCount_.load(std::memory_order_relaxed);
 		stats_.targetsFound = targetsFound_.load(std::memory_order_relaxed);
+		stats_.nearby = nearbyCount_.load(std::memory_order_relaxed);
+		stats_.kindMatches = kindCount_.load(std::memory_order_relaxed);
+		stats_.boneMatches = boneCount_.load(std::memory_order_relaxed);
+		stats_.projected = projectedCount_.load(std::memory_order_relaxed);
 	}
 
 	void CheatModBulletTracking::DrawOverlay() const noexcept
@@ -467,6 +471,11 @@ namespace cheat_mod
 	void CheatModBulletTracking::AcquireTarget() noexcept
 	{
 		acquisitionCount_.fetch_add(1, std::memory_order_relaxed);
+		nearbyCount_.store(0, std::memory_order_relaxed);
+		kindCount_.store(0, std::memory_order_relaxed);
+		boneCount_.store(0, std::memory_order_relaxed);
+		projectedCount_.store(0, std::memory_order_relaxed);
+		targetsFound_.store(0, std::memory_order_relaxed);
 		const float width = viewportWidth_.load(std::memory_order_relaxed);
 		const float height = viewportHeight_.load(std::memory_order_relaxed);
 		const float maximumDistance = maximumDistance_.load(
@@ -501,6 +510,7 @@ namespace cheat_mod
 		}
 		if (count > kMaximumNearbyEntities)
 			count = static_cast<std::uint32_t>(kMaximumNearbyEntities);
+		nearbyCount_.store(count, std::memory_order_relaxed);
 
 		const float fovRadius = fovRadius_.load(std::memory_order_relaxed);
 		const float centerX = width * 0.5F;
@@ -518,6 +528,9 @@ namespace cheat_mod
 		}
 		float bestScore = 1.0e30F;
 		std::uint32_t found = 0;
+		std::uint32_t kindMatches = 0;
+		std::uint32_t boneMatches = 0;
+		std::uint32_t projected = 0;
 		std::uint32_t bestKind = 0;
 		DlModEntityV1 bestEntity{};
 		DlModVector3V1 bestPoint{};
@@ -534,6 +547,7 @@ namespace cheat_mod
 			}
 			if (localInstance != nullptr && item.entity.instance == localInstance)
 				continue;
+			++kindMatches;
 			const float offsetX = item.position.x - cameraPosition.x;
 			const float offsetY = item.position.y - cameraPosition.y;
 			const float offsetZ = item.position.z - cameraPosition.z;
@@ -549,6 +563,7 @@ namespace cheat_mod
 			DlModVector3V1 point{};
 			if (!ReadTargetPoint(item.entity, point))
 				continue;
+			++boneMatches;
 			float screenX = 0.0F;
 			float screenY = 0.0F;
 			if (camera_->project(
@@ -557,6 +572,7 @@ namespace cheat_mod
 			{
 				continue;
 			}
+			++projected;
 			const float screenOffsetX = screenX - centerX;
 			const float screenOffsetY = screenY - centerY;
 			const float screenDistance = screenOffsetX * screenOffsetX +
@@ -576,6 +592,9 @@ namespace cheat_mod
 			bestScreenX = screenX;
 			bestScreenY = screenY;
 		}
+		kindCount_.store(kindMatches, std::memory_order_relaxed);
+		boneCount_.store(boneMatches, std::memory_order_relaxed);
+		projectedCount_.store(projected, std::memory_order_relaxed);
 		targetsFound_.store(found, std::memory_order_relaxed);
 
 		if (bestEntity.instance == nullptr)

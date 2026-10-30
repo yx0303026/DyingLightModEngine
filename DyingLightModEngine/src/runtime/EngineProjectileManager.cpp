@@ -15,8 +15,8 @@
 
 namespace
 {
-	using BulletUpdateFunction = void(__fastcall*)(void*, float, std::uint8_t);
-	using FrameUpdateFunction = void(__fastcall*)(void*);
+	using BulletUpdateFunction = void(__fastcall *)(void *, float, std::uint8_t);
+	using FrameUpdateFunction = void(__fastcall *)(void *);
 
 	/* 锁定构建 gamedll_x64_rwdi.dll 的 BulletManager 与场景帧更新入口。 */
 	constexpr std::uintptr_t kBulletUpdateRva = 0x7123B0;
@@ -24,13 +24,11 @@ namespace
 	constexpr std::uint8_t kBulletSignature[] = {
 		0x40, 0x53, 0x48, 0x83, 0xEC, 0x50,
 		0x0F, 0x29, 0x74, 0x24, 0x40, 0x0F, 0x28, 0xF1,
-		0x48, 0x8B, 0xD9
-	};
+		0x48, 0x8B, 0xD9};
 	constexpr std::uint8_t kFrameSignature[] = {
 		0x40, 0x53, 0x56, 0x57, 0x41, 0x56, 0x48, 0x81, 0xEC,
 		0xE8, 0x00, 0x00, 0x00, 0x4C, 0x89, 0xBC, 0x24,
-		0xE0, 0x00, 0x00, 0x00
-	};
+		0xE0, 0x00, 0x00, 0x00};
 
 	/* BulletManager 记录布局：视觉对象位于 +0x238，轨迹点与速度紧随其后。 */
 	constexpr std::uintptr_t kRecordVisualOffset = 0x238;
@@ -50,27 +48,27 @@ namespace
 	struct UpdateSlot
 	{
 		DlModProjectileUpdateCallback callback = nullptr;
-		void* context = nullptr;
+		void *context = nullptr;
 	};
 
 	struct FrameSlot
 	{
 		DlModFrameCallback callback = nullptr;
-		void* context = nullptr;
+		void *context = nullptr;
 	};
 
-	std::atomic<void*> g_bulletOriginal{ nullptr };
-	std::atomic<void*> g_frameOriginal{ nullptr };
-	std::atomic<bool> g_installed{ false };
-	std::atomic<bool> g_frameHooked{ false };
-	std::atomic<bool> g_hasUpdateCallback{ false };
-	std::atomic<bool> g_hasFrameCallback{ false };
+	std::atomic<void *> g_bulletOriginal{nullptr};
+	std::atomic<void *> g_frameOriginal{nullptr};
+	std::atomic<bool> g_installed{false};
+	std::atomic<bool> g_frameHooked{false};
+	std::atomic<bool> g_hasUpdateCallback{false};
+	std::atomic<bool> g_hasFrameCallback{false};
 	std::mutex g_installMutex;
 
 	/* 单写多读回调槽：写侧使用序号锁，读侧在游戏线程无锁读取。 */
-	std::atomic<std::uint32_t> g_updateSequence{ 0 };
+	std::atomic<std::uint32_t> g_updateSequence{0};
 	UpdateSlot g_updateSlot{};
-	std::atomic<std::uint32_t> g_frameSequence{ 0 };
+	std::atomic<std::uint32_t> g_frameSequence{0};
 	FrameSlot g_frameSlot{};
 
 	thread_local ProjectileKindEntry g_projectileKindCache[kProjectileKindCacheSize]{};
@@ -78,16 +76,16 @@ namespace
 	thread_local std::uintptr_t g_lastVisualVtable = 0;
 	thread_local std::uint32_t g_lastProjectileKind = DLMOD_PROJECTILE_KIND_UNKNOWN;
 
-	template<typename Value>
-	bool ReadField(const void* object, std::uintptr_t offset, Value& value) noexcept
+	template <typename Value>
+	bool ReadField(const void *object, std::uintptr_t offset, Value &value) noexcept
 	{
 		value = {};
 		if (object == nullptr)
 			return false;
 		__try
 		{
-			value = *reinterpret_cast<const Value*>(
-				static_cast<const std::uint8_t*>(object) + offset);
+			value = *reinterpret_cast<const Value *>(
+				static_cast<const std::uint8_t *>(object) + offset);
 			return true;
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER)
@@ -97,14 +95,14 @@ namespace
 		}
 	}
 
-	template<typename Value>
-	bool WriteField(void* object, std::uintptr_t offset, const Value& value) noexcept
+	template <typename Value>
+	bool WriteField(void *object, std::uintptr_t offset, const Value &value) noexcept
 	{
 		if (object == nullptr)
 			return false;
 		__try
 		{
-			*reinterpret_cast<Value*>(static_cast<std::uint8_t*>(object) + offset) = value;
+			*reinterpret_cast<Value *>(static_cast<std::uint8_t *>(object) + offset) = value;
 			return true;
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER)
@@ -113,14 +111,14 @@ namespace
 		}
 	}
 
-	bool IsFinite(const DlModVector3V1& value) noexcept
+	bool IsFinite(const DlModVector3V1 &value) noexcept
 	{
 		return std::isfinite(value.x) && std::isfinite(value.y) &&
-			std::isfinite(value.z);
+			   std::isfinite(value.z);
 	}
 
 	void WriteUpdateSlot(
-		void* context,
+		void *context,
 		DlModProjectileUpdateCallback callback) noexcept
 	{
 		g_updateSequence.fetch_add(1, std::memory_order_acq_rel);
@@ -129,7 +127,7 @@ namespace
 		g_updateSequence.fetch_add(1, std::memory_order_release);
 	}
 
-	bool ReadUpdateSlot(UpdateSlot& slot) noexcept
+	bool ReadUpdateSlot(UpdateSlot &slot) noexcept
 	{
 		const std::uint32_t first =
 			g_updateSequence.load(std::memory_order_acquire);
@@ -141,7 +139,7 @@ namespace
 		return first == second;
 	}
 
-	void WriteFrameSlot(void* context, DlModFrameCallback callback) noexcept
+	void WriteFrameSlot(void *context, DlModFrameCallback callback) noexcept
 	{
 		g_frameSequence.fetch_add(1, std::memory_order_acq_rel);
 		g_frameSlot.callback = callback;
@@ -149,7 +147,7 @@ namespace
 		g_frameSequence.fetch_add(1, std::memory_order_release);
 	}
 
-	bool ReadFrameSlot(FrameSlot& slot) noexcept
+	bool ReadFrameSlot(FrameSlot &slot) noexcept
 	{
 		const std::uint32_t first =
 			g_frameSequence.load(std::memory_order_acquire);
@@ -161,9 +159,9 @@ namespace
 		return first == second;
 	}
 
-	std::uint32_t ClassifyRecord(void* record) noexcept
+	std::uint32_t ClassifyRecord(void *record) noexcept
 	{
-		void* visual = nullptr;
+		void *visual = nullptr;
 		if (!ReadField(record, kRecordVisualOffset, visual) || visual == nullptr)
 			return DLMOD_PROJECTILE_KIND_UNKNOWN;
 		std::uintptr_t vtable = 0;
@@ -171,7 +169,7 @@ namespace
 			return DLMOD_PROJECTILE_KIND_UNKNOWN;
 		if (vtable == g_lastVisualVtable)
 			return g_lastProjectileKind;
-		for (const ProjectileKindEntry& entry : g_projectileKindCache)
+		for (const ProjectileKindEntry &entry : g_projectileKindCache)
 		{
 			if (entry.vtable == vtable)
 			{
@@ -191,20 +189,20 @@ namespace
 			else if (std::strstr(name, "Arrow") != nullptr)
 				kind = DLMOD_PROJECTILE_KIND_ARROW;
 			else if (std::strstr(name, "Bullet") != nullptr ||
-				std::strstr(name, "Tracer") != nullptr)
+					 std::strstr(name, "Tracer") != nullptr)
 				kind = DLMOD_PROJECTILE_KIND_BULLET;
 		}
 
-		g_projectileKindCache[g_projectileKindCursor] = { vtable, kind };
+		g_projectileKindCache[g_projectileKindCursor] = {vtable, kind};
 		g_projectileKindCursor = (g_projectileKindCursor + 1) %
-			kProjectileKindCacheSize;
+								 kProjectileKindCacheSize;
 		g_lastVisualVtable = vtable;
 		g_lastProjectileKind = kind;
 		return kind;
 	}
 
 	void __fastcall BulletUpdateDetour(
-		void* record,
+		void *record,
 		float deltaSeconds,
 		std::uint8_t initialize)
 	{
@@ -220,8 +218,8 @@ namespace
 				update.abiVersion = MODSDK_ABI_VERSION;
 				update.kind = ClassifyRecord(record);
 				update.flags = initialize != 0
-					? DLMOD_PROJECTILE_UPDATE_NEW_FLIGHT
-					: 0U;
+								   ? DLMOD_PROJECTILE_UPDATE_NEW_FLIGHT
+								   : 0U;
 				update.record = record;
 				update.deltaSeconds = deltaSeconds;
 				__try
@@ -237,7 +235,7 @@ namespace
 			original(record, deltaSeconds, initialize);
 	}
 
-	void __fastcall FrameUpdateDetour(void* manager)
+	void __fastcall FrameUpdateDetour(void *manager)
 	{
 		const auto original = reinterpret_cast<FrameUpdateFunction>(
 			g_frameOriginal.load(std::memory_order_acquire));
@@ -258,7 +256,7 @@ namespace
 	}
 }
 
-const DlModProjectileManagerApiV1* EngineProjectileManager::GetApi() noexcept
+const DlModProjectileManagerApiV1 *EngineProjectileManager::GetApi() noexcept
 {
 	static const DlModProjectileManagerApiV1 api = {
 		sizeof(DlModProjectileManagerApiV1),
@@ -271,8 +269,7 @@ const DlModProjectileManagerApiV1* EngineProjectileManager::GetApi() noexcept
 		&ReadKinematics,
 		&ReadPosition,
 		&ReadVelocity,
-		&WriteVelocity
-	};
+		&WriteVelocity};
 #if defined(_M_X64)
 	return &api;
 #else
@@ -295,9 +292,9 @@ DlModResult MODSDK_CALL EngineProjectileManager::Install() noexcept
 	if (!EngineEntityBindings::IsSupportedGame(game))
 		return DLMOD_RESULT_UNSUPPORTED_FEATURE;
 
-	auto* bulletSite = reinterpret_cast<std::uint8_t*>(game) + kBulletUpdateRva;
+	auto *bulletSite = reinterpret_cast<std::uint8_t *>(game) + kBulletUpdateRva;
 	if (std::memcmp(
-		bulletSite, kBulletSignature, sizeof(kBulletSignature)) != 0)
+			bulletSite, kBulletSignature, sizeof(kBulletSignature)) != 0)
 	{
 		EngineLogger::Warning(
 			"Projectile manager is unavailable: BulletManager signature mismatch.");
@@ -307,11 +304,11 @@ DlModResult MODSDK_CALL EngineProjectileManager::Install() noexcept
 	if (initStatus != MH_OK && initStatus != MH_ERROR_ALREADY_INITIALIZED)
 		return DLMOD_RESULT_INVALID_STATE;
 
-	void* bulletTrampoline = nullptr;
+	void *bulletTrampoline = nullptr;
 	if (MH_CreateHook(
-		bulletSite,
-		reinterpret_cast<void*>(&BulletUpdateDetour),
-		&bulletTrampoline) != MH_OK)
+			bulletSite,
+			reinterpret_cast<void *>(&BulletUpdateDetour),
+			&bulletTrampoline) != MH_OK)
 	{
 		return DLMOD_RESULT_INVALID_STATE;
 	}
@@ -325,14 +322,14 @@ DlModResult MODSDK_CALL EngineProjectileManager::Install() noexcept
 	g_installed.store(true, std::memory_order_release);
 
 	/* 帧 Hook 仅用于模组帧回调，缺失时不影响弹丸更新。 */
-	auto* frameSite = reinterpret_cast<std::uint8_t*>(game) + kFrameUpdateRva;
+	auto *frameSite = reinterpret_cast<std::uint8_t *>(game) + kFrameUpdateRva;
 	if (std::memcmp(frameSite, kFrameSignature, sizeof(kFrameSignature)) == 0)
 	{
-		void* frameTrampoline = nullptr;
+		void *frameTrampoline = nullptr;
 		if (MH_CreateHook(
-			frameSite,
-			reinterpret_cast<void*>(&FrameUpdateDetour),
-			&frameTrampoline) == MH_OK)
+				frameSite,
+				reinterpret_cast<void *>(&FrameUpdateDetour),
+				&frameTrampoline) == MH_OK)
 		{
 			g_frameOriginal.store(frameTrampoline, std::memory_order_release);
 			if (MH_EnableHook(frameSite) == MH_OK)
@@ -358,7 +355,7 @@ uint8_t MODSDK_CALL EngineProjectileManager::IsInstalled() noexcept
 }
 
 void MODSDK_CALL EngineProjectileManager::SetUpdateCallback(
-	void* context,
+	void *context,
 	DlModProjectileUpdateCallback callback) noexcept
 {
 	WriteUpdateSlot(context, callback);
@@ -366,21 +363,21 @@ void MODSDK_CALL EngineProjectileManager::SetUpdateCallback(
 }
 
 void MODSDK_CALL EngineProjectileManager::SetFrameCallback(
-	void* context,
+	void *context,
 	DlModFrameCallback callback) noexcept
 {
 	WriteFrameSlot(context, callback);
 	g_hasFrameCallback.store(callback != nullptr, std::memory_order_release);
 }
 
-uint32_t MODSDK_CALL EngineProjectileManager::Classify(const void* record) noexcept
+uint32_t MODSDK_CALL EngineProjectileManager::Classify(const void *record) noexcept
 {
-	return ClassifyRecord(const_cast<void*>(record));
+	return ClassifyRecord(const_cast<void *>(record));
 }
 
 DlModResult MODSDK_CALL EngineProjectileManager::ReadKinematics(
-	const void* record,
-	DlModProjectileKinematicsV1* kinematics) noexcept
+	const void *record,
+	DlModProjectileKinematicsV1 *kinematics) noexcept
 {
 	if (record == nullptr || kinematics == nullptr ||
 		kinematics->structSize <
@@ -411,8 +408,8 @@ DlModResult MODSDK_CALL EngineProjectileManager::ReadKinematics(
 }
 
 DlModResult MODSDK_CALL EngineProjectileManager::ReadPosition(
-	const void* record,
-	DlModVector3V1* position) noexcept
+	const void *record,
+	DlModVector3V1 *position) noexcept
 {
 	if (record == nullptr || position == nullptr)
 		return DLMOD_RESULT_INVALID_ARGUMENT;
@@ -424,8 +421,8 @@ DlModResult MODSDK_CALL EngineProjectileManager::ReadPosition(
 }
 
 DlModResult MODSDK_CALL EngineProjectileManager::ReadVelocity(
-	const void* record,
-	DlModVector3V1* velocity) noexcept
+	const void *record,
+	DlModVector3V1 *velocity) noexcept
 {
 	if (record == nullptr || velocity == nullptr)
 		return DLMOD_RESULT_INVALID_ARGUMENT;
@@ -437,14 +434,14 @@ DlModResult MODSDK_CALL EngineProjectileManager::ReadVelocity(
 }
 
 DlModResult MODSDK_CALL EngineProjectileManager::WriteVelocity(
-	void* record,
-	const DlModVector3V1* velocity) noexcept
+	void *record,
+	const DlModVector3V1 *velocity) noexcept
 {
 	if (record == nullptr || velocity == nullptr || !IsFinite(*velocity))
 		return DLMOD_RESULT_INVALID_ARGUMENT;
 	return WriteField(record, kRecordVelocityOffset, *velocity)
-		? DLMOD_RESULT_SUCCESS
-		: DLMOD_RESULT_INVALID_STATE;
+			   ? DLMOD_RESULT_SUCCESS
+			   : DLMOD_RESULT_INVALID_STATE;
 }
 
 void EngineProjectileManager::Shutdown() noexcept
@@ -456,15 +453,15 @@ void EngineProjectileManager::Shutdown() noexcept
 	{
 		if (g_frameHooked.exchange(false, std::memory_order_acq_rel))
 		{
-			void* frameSite = reinterpret_cast<std::uint8_t*>(game) +
-				kFrameUpdateRva;
+			void *frameSite = reinterpret_cast<std::uint8_t *>(game) +
+							  kFrameUpdateRva;
 			MH_DisableHook(frameSite);
 			MH_RemoveHook(frameSite);
 		}
 		if (g_installed.exchange(false, std::memory_order_acq_rel))
 		{
-			void* bulletSite = reinterpret_cast<std::uint8_t*>(game) +
-				kBulletUpdateRva;
+			void *bulletSite = reinterpret_cast<std::uint8_t *>(game) +
+							   kBulletUpdateRva;
 			MH_DisableHook(bulletSite);
 			MH_RemoveHook(bulletSite);
 		}

@@ -14,8 +14,8 @@
 
 extern "C"
 {
-	void* g_engine_entity_hunter_position_trampoline = nullptr;
-	void* g_engine_entity_hunter_movement_trampoline = nullptr;
+	void *g_engine_entity_hunter_position_trampoline = nullptr;
+	void *g_engine_entity_hunter_movement_trampoline = nullptr;
 	void EngineEntityHunterPositionStub();
 	void EngineEntityHunterMovementStub();
 }
@@ -25,36 +25,36 @@ namespace
 	constexpr std::uintptr_t kPositionSiteRva = 0xECD8C7;
 	constexpr std::uintptr_t kMovementSiteRva = 0x10B0461;
 	constexpr std::uint8_t kPositionSignature[] = {
-		0xF3, 0x0F, 0x11, 0x8F, 0xF4, 0x07, 0x00, 0x00, 0x48 };
+		0xF3, 0x0F, 0x11, 0x8F, 0xF4, 0x07, 0x00, 0x00, 0x48};
 	constexpr std::uint8_t kMovementSignature[] = {
-		0xF3, 0x0F, 0x11, 0x93, 0xA0, 0x01, 0x00, 0x00, 0x48 };
+		0xF3, 0x0F, 0x11, 0x93, 0xA0, 0x01, 0x00, 0x00, 0x48};
 
 	struct MotionState
 	{
-		void* controlObject = nullptr;
-		void* movementObject = nullptr;
+		void *controlObject = nullptr;
+		void *movementObject = nullptr;
 		EngineHunterMotionTracker tracker;
 	};
 
 	SRWLOCK g_stateLock = SRWLOCK_INIT;
 	MotionState g_state{};
-	std::atomic<void*> g_currentHunter{ nullptr };
+	std::atomic<void *> g_currentHunter{nullptr};
 	std::atomic_bool g_installed = false;
 	std::mutex g_installMutex;
 	LARGE_INTEGER g_counterFrequency{};
 	INIT_ONCE g_counterFrequencyOnce = INIT_ONCE_STATIC_INIT;
 
-	BOOL CALLBACK InitializeCounterFrequency(PINIT_ONCE, PVOID, PVOID*)
+	BOOL CALLBACK InitializeCounterFrequency(PINIT_ONCE, PVOID, PVOID *)
 	{
 		return QueryPerformanceFrequency(&g_counterFrequency) &&
-			g_counterFrequency.QuadPart > 0;
+			   g_counterFrequency.QuadPart > 0;
 	}
 
-	bool ReadTimeSeconds(double& seconds) noexcept
+	bool ReadTimeSeconds(double &seconds) noexcept
 	{
 		seconds = 0.0;
 		if (!InitOnceExecuteOnce(
-			&g_counterFrequencyOnce, InitializeCounterFrequency, nullptr, nullptr))
+				&g_counterFrequencyOnce, InitializeCounterFrequency, nullptr, nullptr))
 		{
 			return false;
 		}
@@ -62,20 +62,20 @@ namespace
 		if (!QueryPerformanceCounter(&counter))
 			return false;
 		seconds = static_cast<double>(counter.QuadPart) /
-			static_cast<double>(g_counterFrequency.QuadPart);
+				  static_cast<double>(g_counterFrequency.QuadPart);
 		return std::isfinite(seconds) && seconds > 0.0;
 	}
 
-	template<typename Value>
-	bool ReadField(const void* object, std::uintptr_t offset, Value& value) noexcept
+	template <typename Value>
+	bool ReadField(const void *object, std::uintptr_t offset, Value &value) noexcept
 	{
 		value = {};
 		if (object == nullptr)
 			return false;
 		__try
 		{
-			value = *reinterpret_cast<const Value*>(
-				static_cast<const std::uint8_t*>(object) + offset);
+			value = *reinterpret_cast<const Value *>(
+				static_cast<const std::uint8_t *>(object) + offset);
 			return true;
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER)
@@ -85,13 +85,13 @@ namespace
 		}
 	}
 
-	bool IsFinite(const DlModVector3V1& value) noexcept
+	bool IsFinite(const DlModVector3V1 &value) noexcept
 	{
 		return std::isfinite(value.x) && std::isfinite(value.y) &&
-			std::isfinite(value.z);
+			   std::isfinite(value.z);
 	}
 
-	void OnPosition(void* controlObject) noexcept
+	void OnPosition(void *controlObject) noexcept
 	{
 		if (controlObject == nullptr)
 			return;
@@ -99,9 +99,9 @@ namespace
 		if (!ReadField(controlObject, EngineEntityBindings::HunterModelIdOffset, modelId) ||
 			modelId != EngineEntityBindings::HunterModelId)
 		{
-			void* expected = controlObject;
+			void *expected = controlObject;
 			if (g_currentHunter.compare_exchange_strong(
-				expected, nullptr, std::memory_order_acq_rel))
+					expected, nullptr, std::memory_order_acq_rel))
 			{
 				AcquireSRWLockExclusive(&g_stateLock);
 				g_state = {};
@@ -110,7 +110,7 @@ namespace
 			return;
 		}
 
-		const EngineEntityBindings* bindings = EngineEntityBindings::Resolve();
+		const EngineEntityBindings *bindings = EngineEntityBindings::Resolve();
 		DlModVector3V1 position{};
 		double now = 0.0;
 		if (bindings == nullptr || !ReadTimeSeconds(now) ||
@@ -153,14 +153,14 @@ namespace
 		}
 	}
 
-	void OnMovement(void* movementObject) noexcept
+	void OnMovement(void *movementObject) noexcept
 	{
 		std::uint32_t marker = 0;
 		DlModVector3V1 velocity{};
 		if (!ReadField(
-			movementObject,
-			EngineEntityBindings::HunterMovementMarkerOffset,
-			marker) ||
+				movementObject,
+				EngineEntityBindings::HunterMovementMarkerOffset,
+				marker) ||
 			marker != EngineEntityBindings::HunterMovementMarker ||
 			!ReadField(
 				movementObject,
@@ -170,7 +170,7 @@ namespace
 		{
 			return;
 		}
-		void* controlObject = g_currentHunter.load(std::memory_order_acquire);
+		void *controlObject = g_currentHunter.load(std::memory_order_acquire);
 		double now = 0.0;
 		if (controlObject == nullptr || !ReadTimeSeconds(now))
 			return;
@@ -178,7 +178,7 @@ namespace
 		AcquireSRWLockExclusive(&g_stateLock);
 		if (g_state.controlObject != controlObject ||
 			(g_state.movementObject != nullptr &&
-				g_state.movementObject != movementObject))
+			 g_state.movementObject != movementObject))
 		{
 			g_state = {};
 			g_state.controlObject = controlObject;
@@ -189,12 +189,12 @@ namespace
 	}
 }
 
-extern "C" void EngineEntity_OnHunterPosition(void* controlObject)
+extern "C" void EngineEntity_OnHunterPosition(void *controlObject)
 {
 	OnPosition(controlObject);
 }
 
-extern "C" void EngineEntity_OnHunterMovement(void* movementObject)
+extern "C" void EngineEntity_OnHunterMovement(void *movementObject)
 {
 	OnMovement(movementObject);
 }
@@ -213,10 +213,10 @@ bool EngineHunterTrackingRuntime::Install() noexcept
 	if (!EngineEntityBindings::IsSupportedGame(game))
 		return false;
 
-	auto* positionSite = reinterpret_cast<std::uint8_t*>(game) +
-		kPositionSiteRva;
-	auto* movementSite = reinterpret_cast<std::uint8_t*>(game) +
-		kMovementSiteRva;
+	auto *positionSite = reinterpret_cast<std::uint8_t *>(game) +
+						 kPositionSiteRva;
+	auto *movementSite = reinterpret_cast<std::uint8_t *>(game) +
+						 kMovementSiteRva;
 	if (std::memcmp(positionSite, kPositionSignature, sizeof(kPositionSignature)) != 0 ||
 		std::memcmp(movementSite, kMovementSignature, sizeof(kMovementSignature)) != 0)
 	{
@@ -226,19 +226,19 @@ bool EngineHunterTrackingRuntime::Install() noexcept
 	if (initStatus != MH_OK && initStatus != MH_ERROR_ALREADY_INITIALIZED)
 		return false;
 
-	void* positionTrampoline = nullptr;
-	void* movementTrampoline = nullptr;
+	void *positionTrampoline = nullptr;
+	void *movementTrampoline = nullptr;
 	if (MH_CreateHook(
-		positionSite,
-		reinterpret_cast<void*>(&EngineEntityHunterPositionStub),
-		&positionTrampoline) != MH_OK)
+			positionSite,
+			reinterpret_cast<void *>(&EngineEntityHunterPositionStub),
+			&positionTrampoline) != MH_OK)
 	{
 		return false;
 	}
 	if (MH_CreateHook(
-		movementSite,
-		reinterpret_cast<void*>(&EngineEntityHunterMovementStub),
-		&movementTrampoline) != MH_OK)
+			movementSite,
+			reinterpret_cast<void *>(&EngineEntityHunterMovementStub),
+			&movementTrampoline) != MH_OK)
 	{
 		MH_RemoveHook(positionSite);
 		return false;
@@ -282,10 +282,10 @@ void EngineHunterTrackingRuntime::Shutdown() noexcept
 		const HMODULE game = EngineEntityBindings::GameModule();
 		if (game != nullptr)
 		{
-			void* positionSite = reinterpret_cast<std::uint8_t*>(game) +
-				kPositionSiteRva;
-			void* movementSite = reinterpret_cast<std::uint8_t*>(game) +
-				kMovementSiteRva;
+			void *positionSite = reinterpret_cast<std::uint8_t *>(game) +
+								 kPositionSiteRva;
+			void *movementSite = reinterpret_cast<std::uint8_t *>(game) +
+								 kMovementSiteRva;
 			MH_DisableHook(positionSite);
 			MH_DisableHook(movementSite);
 			MH_RemoveHook(positionSite);
@@ -301,14 +301,14 @@ void EngineHunterTrackingRuntime::Shutdown() noexcept
 #endif
 }
 
-void* EngineHunterTrackingRuntime::GetCurrentControlObject() noexcept
+void *EngineHunterTrackingRuntime::GetCurrentControlObject() noexcept
 {
 	return g_currentHunter.load(std::memory_order_acquire);
 }
 
 bool EngineHunterTrackingRuntime::ReadMotion(
-	void* controlObject,
-	DlModHunterMotionV1& motion) noexcept
+	void *controlObject,
+	DlModHunterMotionV1 &motion) noexcept
 {
 	motion = {};
 	motion.structSize = sizeof(motion);
@@ -324,4 +324,3 @@ bool EngineHunterTrackingRuntime::ReadMotion(
 	ReleaseSRWLockShared(&g_stateLock);
 	return read;
 }
-

@@ -5,10 +5,11 @@
 
 #include <dxgi.h>
 
-namespace {
+namespace
+{
 
 	const UINT kApplyUiInputStateMessage = WM_APP + 0x431U;
-	EngineInputRuntime* g_activeRuntime = nullptr;
+	EngineInputRuntime *g_activeRuntime = nullptr;
 
 }
 
@@ -17,16 +18,18 @@ EngineInputRuntime::~EngineInputRuntime()
 	Shutdown();
 }
 
-void EngineInputRuntime::AttachSwapChain(void* graphicsContext) noexcept
+void EngineInputRuntime::AttachSwapChain(void *graphicsContext) noexcept
 {
-	auto* swapChain = static_cast<IDXGISwapChain*>(graphicsContext);
-	if (swapChain == nullptr) {
+	auto *swapChain = static_cast<IDXGISwapChain *>(graphicsContext);
+	if (swapChain == nullptr)
+	{
 		return;
 	}
 	DXGI_SWAP_CHAIN_DESC description{};
 	if (SUCCEEDED(swapChain->GetDesc(&description)) &&
 		description.OutputWindow != nullptr &&
-		description.OutputWindow != gameWindow_) {
+		description.OutputWindow != gameWindow_)
+	{
 		AttachGameWindow(description.OutputWindow);
 	}
 }
@@ -36,23 +39,27 @@ void EngineInputRuntime::RefreshUiState() noexcept
 	RefreshWindowHook();
 	const bool uiOpen = EngineModManager::IsUiOpen();
 	const bool previousState = uiOpen_.exchange(uiOpen);
-	if (uiOpen && !previousState && !EngineDirectInputRuntime::IsMouseCaptured()) {
+	if (uiOpen && !previousState && !EngineDirectInputRuntime::IsMouseCaptured())
+	{
 		/* The game may create its DirectInput device after engine startup. */
 		EngineDirectInputRuntime::Install();
 	}
 	EngineDirectInputRuntime::SetUiActive(uiOpen);
-	if (previousState != uiOpen && gameWindow_ != nullptr) {
+	if (previousState != uiOpen && gameWindow_ != nullptr)
+	{
 		PostMessageW(gameWindow_, kApplyUiInputStateMessage, 0, 0);
 	}
 }
 
 void EngineInputRuntime::RefreshWindowHook() noexcept
 {
-	if (gameWindow_ == nullptr) {
+	if (gameWindow_ == nullptr)
+	{
 		return;
 	}
 	if (GetWindowLongPtrW(gameWindow_, GWLP_WNDPROC) ==
-		reinterpret_cast<LONG_PTR>(&WindowProc)) {
+		reinterpret_cast<LONG_PTR>(&WindowProc))
+	{
 		return;
 	}
 	/* The game or another overlay replaced the window proc; take it back. */
@@ -61,10 +68,12 @@ void EngineInputRuntime::RefreshWindowHook() noexcept
 		gameWindow_,
 		GWLP_WNDPROC,
 		reinterpret_cast<LONG_PTR>(&WindowProc));
-	if (previous == 0 && GetLastError() != ERROR_SUCCESS) {
+	if (previous == 0 && GetLastError() != ERROR_SUCCESS)
+	{
 		return;
 	}
-	if (previous != reinterpret_cast<LONG_PTR>(&WindowProc)) {
+	if (previous != reinterpret_cast<LONG_PTR>(&WindowProc))
+	{
 		originalWindowProc_ = reinterpret_cast<WNDPROC>(previous);
 	}
 	g_activeRuntime = this;
@@ -81,9 +90,10 @@ LRESULT CALLBACK EngineInputRuntime::WindowProc(
 	WPARAM wParam,
 	LPARAM lParam)
 {
-	EngineInputRuntime* runtime = g_activeRuntime;
+	EngineInputRuntime *runtime = g_activeRuntime;
 	if (runtime == nullptr || runtime->gameWindow_ != window ||
-		runtime->originalWindowProc_ == nullptr) {
+		runtime->originalWindowProc_ == nullptr)
+	{
 		return DefWindowProcW(window, message, wParam, lParam);
 	}
 	return runtime->HandleWindowMessage(window, message, wParam, lParam);
@@ -91,7 +101,8 @@ LRESULT CALLBACK EngineInputRuntime::WindowProc(
 
 void EngineInputRuntime::AttachGameWindow(HWND window) noexcept
 {
-	if (window == nullptr || window == gameWindow_) {
+	if (window == nullptr || window == gameWindow_)
+	{
 		return;
 	}
 	DetachGameWindow();
@@ -100,7 +111,8 @@ void EngineInputRuntime::AttachGameWindow(HWND window) noexcept
 		window,
 		GWLP_WNDPROC,
 		reinterpret_cast<LONG_PTR>(&WindowProc));
-	if (original == 0 && GetLastError() != ERROR_SUCCESS) {
+	if (original == 0 && GetLastError() != ERROR_SUCCESS)
+	{
 		return;
 	}
 	gameWindow_ = window;
@@ -112,29 +124,34 @@ void EngineInputRuntime::AttachGameWindow(HWND window) noexcept
 
 void EngineInputRuntime::DetachGameWindow() noexcept
 {
-	if (!gameWindowHookInstalled_ || gameWindow_ == nullptr) {
+	if (!gameWindowHookInstalled_ || gameWindow_ == nullptr)
+	{
 		return;
 	}
 	const HWND gameWindow = gameWindow_;
 	uiOpen_.store(false);
 	const DWORD windowThread = GetWindowThreadProcessId(gameWindow, nullptr);
 	if ((cursorHideCallCount_ != 0 || mouseCaptured_) &&
-		windowThread != GetCurrentThreadId()) {
+		windowThread != GetCurrentThreadId())
+	{
 		SendMessageW(gameWindow, kApplyUiInputStateMessage, 0, 0);
 	}
 	if (GetWindowLongPtrW(gameWindow_, GWLP_WNDPROC) ==
-		reinterpret_cast<LONG_PTR>(&WindowProc)) {
+		reinterpret_cast<LONG_PTR>(&WindowProc))
+	{
 		SetWindowLongPtrW(
 			gameWindow_,
 			GWLP_WNDPROC,
 			reinterpret_cast<LONG_PTR>(originalWindowProc_));
 	}
-	if (g_activeRuntime == this) {
+	if (g_activeRuntime == this)
+	{
 		g_activeRuntime = nullptr;
 	}
 	EngineDirectInputRuntime::SetUiActive(false);
 	EngineDirectInputRuntime::SetGameWindow(nullptr);
-	if (windowThread == GetCurrentThreadId()) {
+	if (windowThread == GetCurrentThreadId())
+	{
 		ApplyUiInputState(false);
 	}
 	gameWindow_ = nullptr;
@@ -150,14 +167,16 @@ LRESULT EngineInputRuntime::HandleWindowMessage(
 	WPARAM wParam,
 	LPARAM lParam) noexcept
 {
-	if (message == kApplyUiInputStateMessage) {
+	if (message == kApplyUiInputStateMessage)
+	{
 		ApplyUiInputState(uiOpen_.load());
 		return 0;
 	}
 
 	const bool uiOpen = uiOpen_.load(std::memory_order_relaxed);
 	ApplyUiInputState(uiOpen);
-	if (uiOpen && message == WM_INPUT) {
+	if (uiOpen && message == WM_INPUT)
+	{
 		EngineDirectInputRuntime::HandleRawInput(
 			reinterpret_cast<HRAWINPUT>(lParam));
 	}
@@ -167,11 +186,13 @@ LRESULT EngineInputRuntime::HandleWindowMessage(
 		static_cast<uintptr_t>(wParam),
 		static_cast<intptr_t>(lParam));
 
-	if (uiOpen && message == WM_SETCURSOR) {
+	if (uiOpen && message == WM_SETCURSOR)
+	{
 		SetCursor(nullptr);
 		return TRUE;
 	}
-	if (uiOpen && IsBlockedInputMessage(message)) {
+	if (uiOpen && IsBlockedInputMessage(message))
+	{
 		return 0;
 	}
 	return CallWindowProcW(originalWindowProc_, window, message, wParam, lParam);
@@ -179,30 +200,37 @@ LRESULT EngineInputRuntime::HandleWindowMessage(
 
 void EngineInputRuntime::ApplyUiInputState(bool uiOpen) noexcept
 {
-	if (gameWindow_ == nullptr) {
+	if (gameWindow_ == nullptr)
+	{
 		return;
 	}
-	if (uiOpen) {
-		if (cursorHideCallCount_ == 0) {
+	if (uiOpen)
+	{
+		if (cursorHideCallCount_ == 0)
+		{
 			int result = ShowCursor(FALSE);
 			++cursorHideCallCount_;
-			while (result >= 0) {
+			while (result >= 0)
+			{
 				result = ShowCursor(FALSE);
 				++cursorHideCallCount_;
 			}
 		}
 		SetCursor(nullptr);
-		if (!mouseCaptured_) {
+		if (!mouseCaptured_)
+		{
 			SetCapture(gameWindow_);
 			mouseCaptured_ = true;
 		}
 		return;
 	}
-	if (mouseCaptured_ && GetCapture() == gameWindow_) {
+	if (mouseCaptured_ && GetCapture() == gameWindow_)
+	{
 		ReleaseCapture();
 	}
 	mouseCaptured_ = false;
-	while (cursorHideCallCount_ > 0) {
+	while (cursorHideCallCount_ > 0)
+	{
 		ShowCursor(TRUE);
 		--cursorHideCallCount_;
 	}
@@ -210,7 +238,8 @@ void EngineInputRuntime::ApplyUiInputState(bool uiOpen) noexcept
 
 bool EngineInputRuntime::IsBlockedInputMessage(UINT message) noexcept
 {
-	switch (message) {
+	switch (message)
+	{
 	case WM_MOUSEMOVE:
 	case WM_LBUTTONDOWN:
 	case WM_LBUTTONUP:

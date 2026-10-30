@@ -8,8 +8,8 @@ public:
 	static bool Install() noexcept;
 	static bool IsInstalled() noexcept;
 	static void Shutdown() noexcept;
-	static void* GetCurrentControlObject() noexcept;
+	static void *GetCurrentControlObject() noexcept;
 	static bool ReadMotion(
-		void* controlObject,
-		DlModHunterMotionV1& motion) noexcept;
+		void *controlObject,
+		DlModHunterMotionV1 &motion) noexcept;
 };

@@ -43,6 +43,17 @@ public:
 	static constexpr std::uintptr_t BodyPartsHealthModuleVtableRva = 0x1447AF0;
 	static constexpr std::uintptr_t ReplicationIdOffset = 0x06;
 	static constexpr std::uintptr_t ActorVisualOffset = 0x338;
+	/* CZombieStateMachine：BTZ 猎手状态机的状态、光免疫计时与 HUD 格挡标记。 */
+	static constexpr std::uintptr_t HunterStateMachineOffset = 0xC98;
+	static constexpr std::uintptr_t ZombieStateMachineStateOffset = 0x38;
+	static constexpr std::uintptr_t ZombieStateMachineShieldSecondsOffset = 0xA4;
+	static constexpr std::uintptr_t ZombieStateMachineShieldFlagOffset = 0xA8;
+	static constexpr std::uintptr_t ZombieStateMachineSmokeChargesOffset = 0x70;
+	/* 状态机写入光免疫计时的四处指令（护盾递减、客户端递减、防御烟雾、捶地）。 */
+	static constexpr std::uintptr_t HunterUvShieldUpdateSiteRva = 0xDD98BD;
+	static constexpr std::uintptr_t HunterUvShieldClientSiteRva = 0xDD9977;
+	static constexpr std::uintptr_t HunterUvShieldSmokeSiteRva = 0xDD87A2;
+	static constexpr std::uintptr_t HunterUvShieldGroundPoundSiteRva = 0xDDD5F9;
 
 	static HMODULE GameModule() noexcept;
 	static HMODULE EngineModule() noexcept;

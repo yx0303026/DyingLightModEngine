@@ -5,9 +5,10 @@
 #include <d3d11.h>
 #include <functional>
 
-namespace {
+namespace
+{
 
-	const wchar_t* kWindowClassName = L"DyingLightModEngine.GraphicsRuntime";
+	const wchar_t *kWindowClassName = L"DyingLightModEngine.GraphicsRuntime";
 
 }
 
@@ -18,14 +19,17 @@ EngineGraphicsRuntime::~EngineGraphicsRuntime()
 
 bool EngineGraphicsRuntime::Initialize() noexcept
 {
-	if (initialized_) {
+	if (initialized_)
+	{
 		return true;
 	}
-	if (!CreateDummySwapChain()) {
+	if (!CreateDummySwapChain())
+	{
 		DestroyDummySwapChain();
 		return false;
 	}
-	if (!hook_.Install(swapChain_, std::bind(&EngineGraphicsRuntime::RenderFrame, this))) {
+	if (!hook_.Install(swapChain_, std::bind(&EngineGraphicsRuntime::RenderFrame, this)))
+	{
 		DestroyDummySwapChain();
 		return false;
 	}
@@ -35,7 +39,8 @@ bool EngineGraphicsRuntime::Initialize() noexcept
 
 void EngineGraphicsRuntime::Shutdown() noexcept
 {
-	if (!initialized_ && swapChain_ == nullptr && window_ == nullptr) {
+	if (!initialized_ && swapChain_ == nullptr && window_ == nullptr)
+	{
 		return;
 	}
 	input_.Shutdown();
@@ -52,8 +57,10 @@ bool EngineGraphicsRuntime::CreateDummySwapChain() noexcept
 	windowClass.hInstance = instance;
 	windowClass.lpfnWndProc = &DefWindowProcW;
 	windowClass.lpszClassName = kWindowClassName;
-	if (RegisterClassExW(&windowClass) == 0) {
-		if (GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
+	if (RegisterClassExW(&windowClass) == 0)
+	{
+		if (GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+		{
 			return false;
 		}
 	}
@@ -72,7 +79,8 @@ bool EngineGraphicsRuntime::CreateDummySwapChain() noexcept
 		nullptr,
 		instance,
 		nullptr);
-	if (window_ == nullptr) {
+	if (window_ == nullptr)
+	{
 		return false;
 	}
 
@@ -106,15 +114,18 @@ bool EngineGraphicsRuntime::CreateDummySwapChain() noexcept
 
 void EngineGraphicsRuntime::DestroyDummySwapChain() noexcept
 {
-	if (swapChain_ != nullptr) {
+	if (swapChain_ != nullptr)
+	{
 		swapChain_->Release();
 		swapChain_ = nullptr;
 	}
-	if (window_ != nullptr) {
+	if (window_ != nullptr)
+	{
 		DestroyWindow(window_);
 		window_ = nullptr;
 	}
-	if (windowClassRegistered_) {
+	if (windowClassRegistered_)
+	{
 		UnregisterClassW(kWindowClassName, GetModuleHandleW(nullptr));
 		windowClassRegistered_ = false;
 	}
@@ -122,8 +133,9 @@ void EngineGraphicsRuntime::DestroyDummySwapChain() noexcept
 
 void EngineGraphicsRuntime::RenderFrame() noexcept
 {
-	void* swapChain = hook_.GetCurrentSwapChain();
-	if (swapChain == nullptr) {
+	void *swapChain = hook_.GetCurrentSwapChain();
+	if (swapChain == nullptr)
+	{
 		return;
 	}
 	input_.AttachSwapChain(swapChain);

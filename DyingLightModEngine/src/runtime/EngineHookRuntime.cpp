@@ -6,27 +6,32 @@
 #include <string>
 #include <vector>
 
-namespace {
+namespace
+{
 
-	struct HookNode final {
+	struct HookNode final
+	{
 		std::string modId;
-		void* detour = nullptr;
-		void** originalSlot = nullptr;
+		void *detour = nullptr;
+		void **originalSlot = nullptr;
 	};
 
-	struct HookTarget final {
-		void* address = nullptr;
+	struct HookTarget final
+	{
+		void *address = nullptr;
 		std::vector<HookNode> nodes;
 	};
 
 	std::mutex g_hookMutex;
 	std::vector<HookTarget> g_targets;
-	thread_local const std::string* g_loadingModId = nullptr;
+	thread_local const std::string *g_loadingModId = nullptr;
 
-	std::vector<HookTarget>::iterator FindTarget(void* address) noexcept
+	std::vector<HookTarget>::iterator FindTarget(void *address) noexcept
 	{
-		for (auto target = g_targets.begin(); target != g_targets.end(); ++target) {
-			if (target->address == address) {
+		for (auto target = g_targets.begin(); target != g_targets.end(); ++target)
+		{
+			if (target->address == address)
+			{
 				return target;
 			}
 		}
@@ -34,12 +39,15 @@ namespace {
 	}
 
 	std::vector<HookTarget>::iterator FindOwnerTarget(
-		const std::string& modId,
-		std::size_t& nodeIndex) noexcept
+		const std::string &modId,
+		std::size_t &nodeIndex) noexcept
 	{
-		for (auto target = g_targets.begin(); target != g_targets.end(); ++target) {
-			for (std::size_t index = 0; index < target->nodes.size(); ++index) {
-				if (target->nodes[index].modId == modId) {
+		for (auto target = g_targets.begin(); target != g_targets.end(); ++target)
+		{
+			for (std::size_t index = 0; index < target->nodes.size(); ++index)
+			{
+				if (target->nodes[index].modId == modId)
+				{
 					nodeIndex = index;
 					return target;
 				}
@@ -48,48 +56,59 @@ namespace {
 		return g_targets.end();
 	}
 
-	bool RemoveNode(HookTarget& target, std::size_t index) noexcept
+	bool RemoveNode(HookTarget &target, std::size_t index) noexcept
 	{
-		if (index >= target.nodes.size()) {
+		if (index >= target.nodes.size())
+		{
 			return false;
 		}
 
-		HookNode& node = target.nodes[index];
-		void* continuation = node.originalSlot != nullptr ? *node.originalSlot : nullptr;
-		if (index == 0) {
-			if (target.nodes.size() == 1) {
+		HookNode &node = target.nodes[index];
+		void *continuation = node.originalSlot != nullptr ? *node.originalSlot : nullptr;
+		if (index == 0)
+		{
+			if (target.nodes.size() == 1)
+			{
 				MH_DisableHook(target.address);
 				MH_RemoveHook(target.address);
 				target.nodes.erase(target.nodes.begin());
 				return true;
 			}
 
-			HookNode& replacement = target.nodes[1];
+			HookNode &replacement = target.nodes[1];
 			MH_DisableHook(target.address);
 			MH_RemoveHook(target.address);
 
-			void* trampoline = nullptr;
-			if (MH_CreateHook(target.address, replacement.detour, &trampoline) != MH_OK) {
-				void* restoredTrampoline = nullptr;
-				if (MH_CreateHook(target.address, node.detour, &restoredTrampoline) == MH_OK) {
-					if (node.originalSlot != nullptr) {
+			void *trampoline = nullptr;
+			if (MH_CreateHook(target.address, replacement.detour, &trampoline) != MH_OK)
+			{
+				void *restoredTrampoline = nullptr;
+				if (MH_CreateHook(target.address, node.detour, &restoredTrampoline) == MH_OK)
+				{
+					if (node.originalSlot != nullptr)
+					{
 						*node.originalSlot = continuation;
 					}
-					if (target.nodes.back().originalSlot != nullptr) {
+					if (target.nodes.back().originalSlot != nullptr)
+					{
 						*target.nodes.back().originalSlot = restoredTrampoline;
 					}
 					MH_EnableHook(target.address);
 				}
 				return false;
 			}
-			if (MH_EnableHook(target.address) != MH_OK) {
+			if (MH_EnableHook(target.address) != MH_OK)
+			{
 				MH_RemoveHook(target.address);
-				void* restoredTrampoline = nullptr;
-				if (MH_CreateHook(target.address, node.detour, &restoredTrampoline) == MH_OK) {
-					if (node.originalSlot != nullptr) {
+				void *restoredTrampoline = nullptr;
+				if (MH_CreateHook(target.address, node.detour, &restoredTrampoline) == MH_OK)
+				{
+					if (node.originalSlot != nullptr)
+					{
 						*node.originalSlot = continuation;
 					}
-					if (target.nodes.back().originalSlot != nullptr) {
+					if (target.nodes.back().originalSlot != nullptr)
+					{
 						*target.nodes.back().originalSlot = restoredTrampoline;
 					}
 					MH_EnableHook(target.address);
@@ -97,16 +116,18 @@ namespace {
 				return false;
 			}
 
-			HookNode& tail = target.nodes.back();
-			if (tail.originalSlot != nullptr) {
+			HookNode &tail = target.nodes.back();
+			if (tail.originalSlot != nullptr)
+			{
 				*tail.originalSlot = trampoline;
 			}
 			target.nodes.erase(target.nodes.begin());
 			return true;
 		}
 
-		HookNode& previous = target.nodes[index - 1];
-		if (previous.originalSlot != nullptr) {
+		HookNode &previous = target.nodes[index - 1];
+		if (previous.originalSlot != nullptr)
+		{
 			*previous.originalSlot = continuation;
 		}
 		target.nodes.erase(target.nodes.begin() + static_cast<std::ptrdiff_t>(index));
@@ -115,61 +136,70 @@ namespace {
 
 }
 
-const DlModHookApiV1* EngineHookRuntime::GetApi() noexcept
+const DlModHookApiV1 *EngineHookRuntime::GetApi() noexcept
 {
 	static const DlModHookApiV1 api = {
 		sizeof(DlModHookApiV1),
 		MODSDK_ABI_VERSION,
-		&RegisterHook
-	};
+		&RegisterHook};
 	return &api;
 }
 
 DlModResult EngineHookRuntime::RegisterForMod(
-	const std::string& modId,
-	void* targetAddress,
-	void* detour,
-	void** original) noexcept
+	const std::string &modId,
+	void *targetAddress,
+	void *detour,
+	void **original) noexcept
 {
 	if (modId.empty() || targetAddress == nullptr || detour == nullptr || original == nullptr ||
-		targetAddress == detour) {
+		targetAddress == detour)
+	{
 		return DLMOD_RESULT_INVALID_ARGUMENT;
 	}
 
-	try {
+	try
+	{
 		const std::lock_guard<std::mutex> lock(g_hookMutex);
 		auto target = FindTarget(targetAddress);
-		if (target != g_targets.end()) {
-			for (const HookNode& node : target->nodes) {
-				if (node.detour == detour || node.originalSlot == original) {
+		if (target != g_targets.end())
+		{
+			for (const HookNode &node : target->nodes)
+			{
+				if (node.detour == detour || node.originalSlot == original)
+				{
 					return DLMOD_RESULT_INVALID_STATE;
 				}
 			}
-			target->nodes.push_back({ modId, detour, original });
-			void* continuation = *target->nodes[target->nodes.size() - 2].originalSlot;
+			target->nodes.push_back({modId, detour, original});
+			void *continuation = *target->nodes[target->nodes.size() - 2].originalSlot;
 			*target->nodes[target->nodes.size() - 2].originalSlot = detour;
 			*original = continuation;
 			return DLMOD_RESULT_SUCCESS;
 		}
 
 		const MH_STATUS initializeStatus = MH_Initialize();
-		if (initializeStatus != MH_OK && initializeStatus != MH_ERROR_ALREADY_INITIALIZED) {
+		if (initializeStatus != MH_OK && initializeStatus != MH_ERROR_ALREADY_INITIALIZED)
+		{
 			return DLMOD_RESULT_INVALID_STATE;
 		}
-		void* trampoline = nullptr;
-		if (MH_CreateHook(targetAddress, detour, &trampoline) != MH_OK) {
+		void *trampoline = nullptr;
+		if (MH_CreateHook(targetAddress, detour, &trampoline) != MH_OK)
+		{
 			return DLMOD_RESULT_INVALID_STATE;
 		}
 		*original = trampoline;
-		if (MH_EnableHook(targetAddress) != MH_OK) {
+		if (MH_EnableHook(targetAddress) != MH_OK)
+		{
 			MH_RemoveHook(targetAddress);
 			*original = nullptr;
 			return DLMOD_RESULT_INVALID_STATE;
 		}
-		try {
-			g_targets.push_back({ targetAddress, {{ modId, detour, original }} });
+		try
+		{
+			g_targets.push_back({targetAddress, {{modId, detour, original}}});
 		}
-		catch (...) {
+		catch (...)
+		{
 			MH_DisableHook(targetAddress);
 			MH_RemoveHook(targetAddress);
 			*original = nullptr;
@@ -177,69 +207,82 @@ DlModResult EngineHookRuntime::RegisterForMod(
 		}
 		return DLMOD_RESULT_SUCCESS;
 	}
-	catch (...) {
+	catch (...)
+	{
 		return DLMOD_RESULT_INVALID_STATE;
 	}
 }
 
-bool EngineHookRuntime::RemoveForMod(const std::string& modId) noexcept
+bool EngineHookRuntime::RemoveForMod(const std::string &modId) noexcept
 {
-	try {
+	try
+	{
 		const std::lock_guard<std::mutex> lock(g_hookMutex);
-		for (;;) {
+		for (;;)
+		{
 			std::size_t nodeIndex = 0;
 			auto target = FindOwnerTarget(modId, nodeIndex);
-			if (target == g_targets.end()) {
+			if (target == g_targets.end())
+			{
 				break;
 			}
-			if (!RemoveNode(*target, nodeIndex)) {
+			if (!RemoveNode(*target, nodeIndex))
+			{
 				return false;
 			}
-			if (target->nodes.empty()) {
+			if (target->nodes.empty())
+			{
 				g_targets.erase(target);
 			}
 		}
 		return true;
 	}
-	catch (...) {
+	catch (...)
+	{
 		return false;
 	}
 }
 
 void EngineHookRuntime::RemoveAll() noexcept
 {
-	try {
+	try
+	{
 		const std::lock_guard<std::mutex> lock(g_hookMutex);
-		for (HookTarget& target : g_targets) {
+		for (HookTarget &target : g_targets)
+		{
 			MH_DisableHook(target.address);
 			MH_RemoveHook(target.address);
-			for (HookNode& node : target.nodes) {
-				if (node.originalSlot != nullptr) {
+			for (HookNode &node : target.nodes)
+			{
+				if (node.originalSlot != nullptr)
+				{
 					*node.originalSlot = nullptr;
 				}
 			}
 		}
 		g_targets.clear();
 	}
-	catch (...) {
+	catch (...)
+	{
 	}
 }
 
 DlModResult MODSDK_CALL EngineHookRuntime::RegisterHook(
-	void* target,
-	void* detour,
-	void** original) noexcept
+	void *target,
+	void *detour,
+	void **original) noexcept
 {
 	return g_loadingModId == nullptr
-		? DLMOD_RESULT_INVALID_STATE
-		: RegisterForMod(*g_loadingModId, target, detour, original);
+			   ? DLMOD_RESULT_INVALID_STATE
+			   : RegisterForMod(*g_loadingModId, target, detour, original);
 }
 
-namespace EngineHookRuntimeDetail {
+namespace EngineHookRuntimeDetail
+{
 
-	const std::string* SetLoadingMod(const std::string* modId) noexcept
+	const std::string *SetLoadingMod(const std::string *modId) noexcept
 	{
-		const std::string* previous = g_loadingModId;
+		const std::string *previous = g_loadingModId;
 		g_loadingModId = modId;
 		return previous;
 	}

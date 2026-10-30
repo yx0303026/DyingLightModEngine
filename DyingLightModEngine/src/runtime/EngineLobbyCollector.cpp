@@ -822,7 +822,7 @@ std::int32_t EngineLobbyCollector::HookPlatformTick(
 	const void *localProductUserId = nullptr;
 	if (connectionInterface != nullptr && loggedInUser != nullptr &&
 		(previousPlatform != platform || previousConnection != connectionInterface ||
-			needsLocalProductUserId))
+		 needsLocalProductUserId))
 	{
 		localProductUserId = loggedInUser(connectionInterface, 0);
 	}

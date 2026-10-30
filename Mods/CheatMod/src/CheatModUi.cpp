@@ -324,7 +324,11 @@ namespace cheat_mod {
 				"Updates " + std::to_string(stats.updates) +
 				" | Candidates " + std::to_string(stats.candidates) +
 				" | Adjusted " + std::to_string(stats.adjusted) +
-				" | Targets " + std::to_string(stats.targetsFound));
+				" | Targets " + std::to_string(stats.targetsFound) +
+				"\nNearby " + std::to_string(stats.nearby) +
+				" | Kind " + std::to_string(stats.kindMatches) +
+				" | Bone " + std::to_string(stats.boneMatches) +
+				" | Proj " + std::to_string(stats.projected));
 		}
 	}
 

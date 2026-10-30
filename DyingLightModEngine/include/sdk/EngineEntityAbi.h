@@ -17,6 +17,10 @@ extern "C"
 #define DLMOD_HUNTER_HAS_VELOCITY 0x00000002u
 #define DLMOD_HUNTER_HAS_ACCELERATION 0x00000004u
 #define DLMOD_HUNTER_HAS_SKELETON_POSITION 0x00000008u
+#define DLMOD_HUNTER_UV_HAS_STATE 0x00000001u
+#define DLMOD_HUNTER_UV_HAS_SHIELD 0x00000002u
+#define DLMOD_HUNTER_UV_HAS_FLAG 0x00000004u
+#define DLMOD_HUNTER_UV_HAS_CHARGES 0x00000008u
 	typedef enum DlModEntityKindV1
 	{
 		DLMOD_ENTITY_KIND_UNKNOWN = 0,
@@ -44,13 +48,44 @@ extern "C"
 		double readTimeSeconds;
 	} DlModHunterMotionV1;
 
+	/* 紫外线护盾写入模式：GAME 不干预，PIN 固定剩余秒数，OFF 清零，SCALE 按倍率缩放。 */
+#define DLMOD_HUNTER_UV_SHIELD_MODE_GAME 0u
+#define DLMOD_HUNTER_UV_SHIELD_MODE_PIN 1u
+#define DLMOD_HUNTER_UV_SHIELD_MODE_OFF 2u
+#define DLMOD_HUNTER_UV_SHIELD_MODE_SCALE 3u
+
+	/* 紫外线护盾快照：shieldSeconds 为状态机上的光免疫剩余秒数，shieldFlag 为 HUD 紫外格挡标记，
+	   smokeCharges 为防御烟雾剩余充能（状态机 +0x70），shieldDuration 为最近一次激活的时长。 */
+	typedef struct DlModHunterUvShieldV1
+	{
+		uint32_t structSize;
+		uint32_t abiVersion;
+		uint32_t validFields;
+		uint32_t zombieState;
+		float shieldSeconds;
+		float shieldDuration;
+		uint32_t shieldFlag;
+		int32_t smokeCharges;
+		void *stateMachine;
+		double readTimeSeconds;
+	} DlModHunterUvShieldV1;
+
 	/* 实体句柄仅持有游戏对象指针；派生句柄使用基础句柄前缀以支持向上转型。 */
 	/* C++ 使用继承表达类型关系；C 使用相同布局的嵌套结构体。 */
 #if defined(__cplusplus)
-	struct DlModEntityV1 { void *instance; };
-	struct DlModPlayerV1 : DlModEntityV1 {};
-	struct DlModHumanV1 : DlModPlayerV1 {};
-	struct DlModHunterV1 : DlModPlayerV1 {};
+	struct DlModEntityV1
+	{
+		void *instance;
+	};
+	struct DlModPlayerV1 : DlModEntityV1
+	{
+	};
+	struct DlModHumanV1 : DlModPlayerV1
+	{
+	};
+	struct DlModHunterV1 : DlModPlayerV1
+	{
+	};
 
 	struct DlModEntitySnapshotV1
 	{
@@ -71,37 +106,70 @@ extern "C"
 		float bloodMaskHealth;
 		uint64_t lastDamagerPlayerNetId;
 	};
-	struct DlModPlayerSnapshotV1 : DlModEntitySnapshotV1 { uint32_t playerFlags; };
-	struct DlModHumanSnapshotV1 : DlModPlayerSnapshotV1 { uint32_t humanFlags; };
-	struct DlModHunterSnapshotV1 : DlModPlayerSnapshotV1 { DlModHunterMotionV1 motion; };
-#else
-	typedef struct DlModEntityV1 { void *instance; } DlModEntityV1;
-	typedef struct DlModPlayerV1 { DlModEntityV1 entity; } DlModPlayerV1;
-	typedef struct DlModHumanV1 { DlModPlayerV1 player; } DlModHumanV1;
-	typedef struct DlModHunterV1 { DlModPlayerV1 player; } DlModHunterV1;
-
-	typedef struct DlModEntitySnapshotV1
+	struct DlModPlayerSnapshotV1 : DlModEntitySnapshotV1
 	{
-		uint32_t structSize;
-		uint32_t abiVersion;
-		uint32_t validFields;
-		uint32_t kind;
-		uint32_t reserved;
-		DlModVector3V1 position;
-		DlModVector3V1 forward;
-		DlModVector3V1 up;
-		void *controlObject;
-		void *level;
-		uint16_t replicationId;
-		uint8_t modelId;
-		uint8_t reserved2;
-		float bodyHealth;
-		float bloodMaskHealth;
-		uint64_t lastDamagerPlayerNetId;
-	} DlModEntitySnapshotV1;
-	typedef struct DlModPlayerSnapshotV1 { DlModEntitySnapshotV1 entity; uint32_t playerFlags; } DlModPlayerSnapshotV1;
-	typedef struct DlModHumanSnapshotV1 { DlModPlayerSnapshotV1 player; uint32_t humanFlags; } DlModHumanSnapshotV1;
-	typedef struct DlModHunterSnapshotV1 { DlModPlayerSnapshotV1 player; DlModHunterMotionV1 motion; } DlModHunterSnapshotV1;
+		uint32_t playerFlags;
+	};
+	struct DlModHumanSnapshotV1 : DlModPlayerSnapshotV1
+	{
+		uint32_t humanFlags;
+	};
+	struct DlModHunterSnapshotV1 : DlModPlayerSnapshotV1
+	{
+		DlModHunterMotionV1 motion;
+	};
+#else
+typedef struct DlModEntityV1
+{
+	void *instance;
+} DlModEntityV1;
+typedef struct DlModPlayerV1
+{
+	DlModEntityV1 entity;
+} DlModPlayerV1;
+typedef struct DlModHumanV1
+{
+	DlModPlayerV1 player;
+} DlModHumanV1;
+typedef struct DlModHunterV1
+{
+	DlModPlayerV1 player;
+} DlModHunterV1;
+
+typedef struct DlModEntitySnapshotV1
+{
+	uint32_t structSize;
+	uint32_t abiVersion;
+	uint32_t validFields;
+	uint32_t kind;
+	uint32_t reserved;
+	DlModVector3V1 position;
+	DlModVector3V1 forward;
+	DlModVector3V1 up;
+	void *controlObject;
+	void *level;
+	uint16_t replicationId;
+	uint8_t modelId;
+	uint8_t reserved2;
+	float bodyHealth;
+	float bloodMaskHealth;
+	uint64_t lastDamagerPlayerNetId;
+} DlModEntitySnapshotV1;
+typedef struct DlModPlayerSnapshotV1
+{
+	DlModEntitySnapshotV1 entity;
+	uint32_t playerFlags;
+} DlModPlayerSnapshotV1;
+typedef struct DlModHumanSnapshotV1
+{
+	DlModPlayerSnapshotV1 player;
+	uint32_t humanFlags;
+} DlModHumanSnapshotV1;
+typedef struct DlModHunterSnapshotV1
+{
+	DlModPlayerSnapshotV1 player;
+	DlModHunterMotionV1 motion;
+} DlModHunterSnapshotV1;
 #endif
 
 /* 派生快照以基础快照为前缀，调用方可按实际类型读取扩展字段。 */
@@ -170,6 +238,20 @@ extern "C"
 		const DlModEntityV1 *entity,
 		const char *name,
 		DlModVector3V1 *position);
+	/* 紫外线护盾：安装状态机写入钩子、读取当前护盾状态并下发覆盖策略。 */
+	typedef DlModResult(MODSDK_CALL *ModEngineInstallUvShieldTrackingFn)(void);
+	typedef uint8_t(MODSDK_CALL *ModEngineIsUvShieldTrackingInstalledFn)(void);
+	typedef DlModResult(MODSDK_CALL *ModEngineReadHunterUvShieldFn)(
+		DlModHunterUvShieldV1 *snapshot);
+	typedef DlModResult(MODSDK_CALL *ModEngineSetHunterUvShieldFn)(
+		uint32_t mode,
+		float value);
+	/* 充能：charges < 0 关闭覆盖，否则每帧把状态机剩余充能固定为该值。
+	   时长：seconds <= 0 关闭覆盖，否则激活时直接用该秒数替换游戏配置值。 */
+	typedef DlModResult(MODSDK_CALL *ModEngineSetHunterUvShieldChargesFn)(
+		int32_t charges);
+	typedef DlModResult(MODSDK_CALL *ModEngineSetHunterUvShieldDurationFn)(
+		float seconds);
 
 	typedef struct DlModEntityApiV1
 	{
@@ -191,6 +273,12 @@ extern "C"
 		ModEngineIsHunterTrackingInstalledFn isHunterTrackingInstalled;
 		ModEngineEnumerateNearbyFn enumerateNearby;
 		ModEngineReadBoneByNameFn readBoneByName;
+		ModEngineInstallUvShieldTrackingFn installUvShieldTracking;
+		ModEngineIsUvShieldTrackingInstalledFn isUvShieldTrackingInstalled;
+		ModEngineReadHunterUvShieldFn readHunterUvShield;
+		ModEngineSetHunterUvShieldFn setHunterUvShield;
+		ModEngineSetHunterUvShieldChargesFn setHunterUvShieldCharges;
+		ModEngineSetHunterUvShieldDurationFn setHunterUvShieldDuration;
 	} DlModEntityApiV1;
 
 #define DLMOD_ENTITY_API_V1_MIN_SIZE \
@@ -201,6 +289,8 @@ extern "C"
 	((uint32_t)(offsetof(DlModEntityApiV1, enumerateNearby) + sizeof(ModEngineEnumerateNearbyFn)))
 #define DLMOD_ENTITY_API_V1_BONE_NAME_SIZE \
 	((uint32_t)(offsetof(DlModEntityApiV1, readBoneByName) + sizeof(ModEngineReadBoneByNameFn)))
+#define DLMOD_ENTITY_API_V1_UV_SHIELD_SIZE \
+	((uint32_t)(offsetof(DlModEntityApiV1, setHunterUvShieldDuration) + sizeof(ModEngineSetHunterUvShieldDurationFn)))
 
 #ifdef __cplusplus
 }

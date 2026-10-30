@@ -55,4 +55,15 @@ private:
 		DlModHunterMotionV1 *motion) noexcept;
 	static DlModResult MODSDK_CALL InstallHunterTracking() noexcept;
 	static uint8_t MODSDK_CALL IsHunterTrackingInstalled() noexcept;
+	static DlModResult MODSDK_CALL InstallUvShieldTracking() noexcept;
+	static uint8_t MODSDK_CALL IsUvShieldTrackingInstalled() noexcept;
+	static DlModResult MODSDK_CALL ReadHunterUvShield(
+		DlModHunterUvShieldV1 *snapshot) noexcept;
+	static DlModResult MODSDK_CALL SetHunterUvShield(
+		uint32_t mode,
+		float value) noexcept;
+	static DlModResult MODSDK_CALL SetHunterUvShieldCharges(
+		int32_t charges) noexcept;
+	static DlModResult MODSDK_CALL SetHunterUvShieldDuration(
+		float seconds) noexcept;
 };

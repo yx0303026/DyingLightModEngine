@@ -10,13 +10,13 @@
 
 namespace
 {
-	bool IsFinite(const DlModVector3V1& value) noexcept
+	bool IsFinite(const DlModVector3V1 &value) noexcept
 	{
 		return std::isfinite(value.x) && std::isfinite(value.y) &&
-			std::isfinite(value.z);
+			   std::isfinite(value.z);
 	}
 
-	bool ReadCamera(const EngineEntityBindings& bindings, void*& camera) noexcept
+	bool ReadCamera(const EngineEntityBindings &bindings, void *&camera) noexcept
 	{
 		camera = nullptr;
 		const HMODULE game = EngineEntityBindings::GameModule();
@@ -28,7 +28,7 @@ namespace
 		std::uintptr_t gameInstance = 0;
 		__try
 		{
-			gameInstance = *reinterpret_cast<const std::uintptr_t*>(
+			gameInstance = *reinterpret_cast<const std::uintptr_t *>(
 				reinterpret_cast<std::uintptr_t>(game) +
 				EngineEntityBindings::GameGlobalRva);
 		}
@@ -40,8 +40,8 @@ namespace
 			return false;
 		__try
 		{
-			void* level = bindings.getActiveLevel(
-				reinterpret_cast<void*>(gameInstance));
+			void *level = bindings.getActiveLevel(
+				reinterpret_cast<void *>(gameInstance));
 			if (level == nullptr)
 				return false;
 			camera = bindings.getActiveCamera(level);
@@ -54,9 +54,9 @@ namespace
 		}
 	}
 
-	bool ReadCameraMatrix(const void* camera, float (&matrix)[16]) noexcept
+	bool ReadCameraMatrix(const void *camera, float (&matrix)[16]) noexcept
 	{
-		const EngineEntityBindings* bindings = EngineEntityBindings::Resolve();
+		const EngineEntityBindings *bindings = EngineEntityBindings::Resolve();
 		if (bindings == nullptr || bindings->getCameraMatrix == nullptr ||
 			camera == nullptr)
 		{
@@ -64,8 +64,8 @@ namespace
 		}
 		__try
 		{
-			const float* source = bindings->getCameraMatrix(
-				const_cast<void*>(camera));
+			const float *source = bindings->getCameraMatrix(
+				const_cast<void *>(camera));
 			if (source == nullptr)
 				return false;
 			for (std::size_t index = 0; index < 16; ++index)
@@ -83,15 +83,14 @@ namespace
 	}
 }
 
-const DlModCameraApiV1* EngineCameraRuntime::GetApi() noexcept
+const DlModCameraApiV1 *EngineCameraRuntime::GetApi() noexcept
 {
 	static const DlModCameraApiV1 api = {
 		sizeof(DlModCameraApiV1),
 		MODSDK_ABI_VERSION,
 		&ReadPosition,
 		&ReadMatrix,
-		&Project
-	};
+		&Project};
 #if defined(_M_X64)
 	return &api;
 #else
@@ -100,13 +99,13 @@ const DlModCameraApiV1* EngineCameraRuntime::GetApi() noexcept
 }
 
 DlModResult MODSDK_CALL EngineCameraRuntime::ReadPosition(
-	DlModVector3V1* position) noexcept
+	DlModVector3V1 *position) noexcept
 {
 	if (position == nullptr)
 		return DLMOD_RESULT_INVALID_ARGUMENT;
 	*position = {};
-	const EngineEntityBindings* bindings = EngineEntityBindings::Resolve();
-	void* camera = nullptr;
+	const EngineEntityBindings *bindings = EngineEntityBindings::Resolve();
+	void *camera = nullptr;
 	if (bindings == nullptr || bindings->getCameraPosition == nullptr ||
 		!ReadCamera(*bindings, camera))
 	{
@@ -130,13 +129,13 @@ DlModResult MODSDK_CALL EngineCameraRuntime::ReadPosition(
 }
 
 DlModResult MODSDK_CALL EngineCameraRuntime::ReadMatrix(
-	float* matrix,
+	float *matrix,
 	uint32_t count) noexcept
 {
 	if (matrix == nullptr || count < DLMOD_CAMERA_MATRIX_COUNT)
 		return DLMOD_RESULT_INVALID_ARGUMENT;
-	const EngineEntityBindings* bindings = EngineEntityBindings::Resolve();
-	void* camera = nullptr;
+	const EngineEntityBindings *bindings = EngineEntityBindings::Resolve();
+	void *camera = nullptr;
 	if (bindings == nullptr || bindings->getCameraMatrix == nullptr ||
 		!ReadCamera(*bindings, camera))
 	{
@@ -151,11 +150,11 @@ DlModResult MODSDK_CALL EngineCameraRuntime::ReadMatrix(
 }
 
 DlModResult MODSDK_CALL EngineCameraRuntime::Project(
-	const DlModVector3V1* world,
+	const DlModVector3V1 *world,
 	float viewportWidth,
 	float viewportHeight,
-	float* screenX,
-	float* screenY) noexcept
+	float *screenX,
+	float *screenY) noexcept
 {
 	if (world == nullptr || screenX == nullptr || screenY == nullptr ||
 		!IsFinite(*world) || !std::isfinite(viewportWidth) ||
@@ -167,8 +166,8 @@ DlModResult MODSDK_CALL EngineCameraRuntime::Project(
 	*screenX = 0.0F;
 	*screenY = 0.0F;
 
-	const EngineEntityBindings* bindings = EngineEntityBindings::Resolve();
-	void* camera = nullptr;
+	const EngineEntityBindings *bindings = EngineEntityBindings::Resolve();
+	void *camera = nullptr;
 	if (bindings == nullptr || bindings->getCameraMatrix == nullptr ||
 		!ReadCamera(*bindings, camera))
 	{
@@ -179,11 +178,11 @@ DlModResult MODSDK_CALL EngineCameraRuntime::Project(
 		return DLMOD_RESULT_NOT_FOUND;
 
 	const float clipX = world->x * matrix[0] + world->y * matrix[1] +
-		world->z * matrix[2] + matrix[3];
+						world->z * matrix[2] + matrix[3];
 	const float clipY = world->x * matrix[4] + world->y * matrix[5] +
-		world->z * matrix[6] + matrix[7];
+						world->z * matrix[6] + matrix[7];
 	const float clipW = world->x * matrix[12] + world->y * matrix[13] +
-		world->z * matrix[14] + matrix[15];
+						world->z * matrix[14] + matrix[15];
 	if (!std::isfinite(clipX) || !std::isfinite(clipY) ||
 		!std::isfinite(clipW) || clipW < 0.001F)
 	{
