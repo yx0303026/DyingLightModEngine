@@ -10,8 +10,8 @@ game-native hotkey API.
 On load the mod installs the engine's hunter UV shield hooks and turns the Night
 Hunter's UV immunity into a toggleable skill:
 
-- Press **F7** to toggle the shield (rebindable in the game's
-  Settings → Controls → Key Bindings page "Example Mod").
+- Press **F7** to toggle the shield. The engine uses safe default-key polling
+  and does not modify the game's native input containers.
 - The charge number is hidden using the game's unlimited-charge sentinel.
 - The HUD progress ring tracks shield energy instead of the hunter's UV resistance.
 - A full energy bar keeps the shield up for **10 seconds**.
@@ -33,9 +33,9 @@ the campaign is unaffected.
 
 ## Native Hotkeys
 
-The example registers its toggle through `DlModHotkeyApiV1` instead of polling
-the keyboard directly. The engine injects the action, row, and page into the
-game's own key binding system, so the game UI displays and rebinds it:
+The example registers its toggle through `DlModHotkeyApiV1`. The engine keeps
+that registration in its own state and polls the declared default key, so the
+game native input containers remain untouched:
 
 ```cpp
 DlModHotkeyDescV1 hotkey{};
@@ -52,11 +52,12 @@ hotkey.callback = &OnShieldHotkey;
 hostApi->hotkey->registerHotkey(&hotkey);
 ```
 
-Call `registerHotkey` from `onLoad`. Action IDs are allocated from the game's
-free input action slots (0..337), and the callback fires on the key-down edge
-with the resolved action ID. `getHotkeyKey` returns the currently bound key,
-`getHotkeyAction` returns the allocated action ID, and `unregisterHotkey` must
-be called from `onUnload` so the callback never points at an unloaded DLL.
+Call `registerHotkey` from `onLoad`. The callback fires on the key-down edge
+with an engine-owned fallback action ID. `getHotkeyKey` returns the registered
+`defaultKey`, `getHotkeyAction` returns that fallback action ID, and
+`unregisterHotkey` must be called from `onUnload` so the callback never points
+at an unloaded DLL. Native game settings rebinding is intentionally disabled
+until it can be implemented without modifying game-owned input containers.
 
 ## Build
 

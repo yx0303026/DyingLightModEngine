@@ -20,6 +20,7 @@ PUBLIC EngineEntityHunterUvShieldGroundPoundStub
 .code
 
 ; 四处桩替换状态机上的护盾计时写入：主更新、客户端更新、防御烟雾、捶地。
+; 保存顺序概览：栈顶依次为 Rbx、R11、R10、R9、R8、Rdx、Rcx、Rax、标志寄存器；原始 RCX 位于 [rbx+30h]。
 EngineEntityHunterUvShieldTimerStub PROC
 	pushfq
 	push rax
@@ -40,7 +41,7 @@ EngineEntityHunterUvShieldTimerStub PROC
 	movdqu xmmword ptr [rsp+50h], xmm4
 	movdqu xmmword ptr [rsp+60h], xmm5
 
-	mov rcx, qword ptr [rbx]
+	mov rcx, qword ptr [rbx+30h]
 	movd edx, xmm0
 	call EngineEntity_OnHunterUvShieldTimer
 
@@ -83,7 +84,7 @@ EngineEntityHunterUvShieldClientStub PROC
 	movdqu xmmword ptr [rsp+40h], xmm4
 	movdqu xmmword ptr [rsp+50h], xmm5
 
-	mov rcx, qword ptr [rbx]
+	mov rcx, qword ptr [rbx+30h]
 	movd edx, xmm1
 	call EngineEntity_OnHunterUvShieldClientTimer
 
@@ -126,7 +127,7 @@ EngineEntityHunterUvShieldSmokeStub PROC
 	movdqu xmmword ptr [rsp+50h], xmm4
 	movdqu xmmword ptr [rsp+60h], xmm5
 
-	mov rcx, qword ptr [rbx]
+	mov rcx, qword ptr [rbx+30h]
 	movd edx, xmm0
 	call EngineEntity_OnHunterUvShieldDefensiveSmoke
 
@@ -169,7 +170,7 @@ EngineEntityHunterUvShieldGroundPoundStub PROC
 	movdqu xmmword ptr [rsp+50h], xmm4
 	movdqu xmmword ptr [rsp+60h], xmm5
 
-	mov rcx, qword ptr [rbx]
+	mov rcx, qword ptr [rbx+30h]
 	movd edx, xmm0
 	call EngineEntity_OnHunterUvShieldGroundPound
 

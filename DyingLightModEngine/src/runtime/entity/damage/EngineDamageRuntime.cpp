@@ -494,3 +494,23 @@ DlModResult EngineDamageRuntime::UnregisterHook(
 	ReleaseSRWLockExclusive(&g_callbackLock);
 	return DLMOD_RESULT_NOT_FOUND;
 }
+
+bool EngineDamageRuntime::IsHookRegistered(
+	ModEngineDamagePreHookFn pre,
+	ModEngineDamagePostHookFn post) noexcept
+{
+	if (pre == nullptr && post == nullptr)
+		return false;
+	AcquireSRWLockShared(&g_callbackLock);
+	bool found = false;
+	for (std::size_t index = 0; index < g_callbackCount; ++index)
+	{
+		if (g_callbacks[index].pre == pre && g_callbacks[index].post == post)
+		{
+			found = true;
+			break;
+		}
+	}
+	ReleaseSRWLockShared(&g_callbackLock);
+	return found;
+}

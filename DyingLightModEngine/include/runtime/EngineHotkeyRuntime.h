@@ -6,19 +6,19 @@
 #include <string>
 
 /*
- * Hotkey runtime 概览：
- * - 把模组注册的热键注入游戏原生 GameInputsConverter。
- * - 复用游戏按键绑定页面与改键逻辑，不重写菜单。
- * - 通过 GetAsyncKeyState + 当前绑定键轮询触发回调。
+ * 热键运行时概览：
+ * - 保存模组注册的热键，并在渲染线程轮询按键状态。
+ * - 使用注册描述中的默认按键，避免修改游戏内部输入容器。
+ * - 通过 GetAsyncKeyState 触发模组回调，保证生命周期和分配器边界清晰。
  */
 class EngineHotkeyRuntime final {
 public:
 	EngineHotkeyRuntime() = delete;
 
-	/* 在模组全部加载后调用：安装输入脚本刷新 hook。 */
+	/* 在模组全部加载后调用：初始化安全的热键轮询状态。 */
 	static void Initialize() noexcept;
 
-	/* 每帧调用（渲染线程）：注入待处理注册并轮询按键。 */
+	/* 每帧调用（渲染线程）：准备注册并轮询默认按键。 */
 	static void Tick() noexcept;
 
 	static void Shutdown() noexcept;

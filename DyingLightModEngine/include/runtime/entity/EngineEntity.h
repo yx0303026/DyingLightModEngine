@@ -20,6 +20,24 @@ public:
 	DlModResult SetOrientation(const DlModVector3V1 *forward, const DlModVector3V1 *up) const noexcept;
 	DlModResult ReadBoneByName(const char *name, DlModVector3V1 *position) const noexcept;
 
+	/* 受伤钩子：在实体基类统一接入 HealthModule 的伤害结算，派生实体直接复用。 */
+	static DlModResult InstallDamageTracking() noexcept;
+	static bool IsDamageTrackingInstalled() noexcept;
+	/* 全局受伤回调：pre 返回 0 会阻止本次受伤，post 在结算完成后触发。 */
+	static DlModResult RegisterDamageHook(
+		ModEngineDamagePreHookFn pre,
+		ModEngineDamagePostHookFn post) noexcept;
+	static DlModResult UnregisterDamageHook(
+		ModEngineDamagePreHookFn pre,
+		ModEngineDamagePostHookFn post) noexcept;
+	/* 实体级订阅：只把命中当前 instance_ 的受伤事件转发给回调。 */
+	DlModResult SubscribeDamage(
+		ModEngineDamagePreHookFn pre,
+		ModEngineDamagePostHookFn post) const noexcept;
+	DlModResult UnsubscribeDamage(
+		ModEngineDamagePreHookFn pre,
+		ModEngineDamagePostHookFn post) const noexcept;
+
 	static void *FindLocalInstance() noexcept;
 	static bool ReadHealth(const void *entity, float &bodyHealth, float &bloodMaskHealth, std::uint64_t &lastDamagerPlayerNetId) noexcept;
 	static bool ReadEntityHealth(const void *entity, float &bodyHealth) noexcept;

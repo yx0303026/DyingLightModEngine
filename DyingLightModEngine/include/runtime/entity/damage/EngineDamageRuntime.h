@@ -16,4 +16,8 @@ public:
 	static DlModResult UnregisterHook(
 		ModEngineDamagePreHookFn pre,
 		ModEngineDamagePostHookFn post) noexcept;
+	/* 查询回调是否仍在注册表中，用于运行时重启后判断转发跳板是否需要重装。 */
+	static bool IsHookRegistered(
+		ModEngineDamagePreHookFn pre,
+		ModEngineDamagePostHookFn post) noexcept;
 };

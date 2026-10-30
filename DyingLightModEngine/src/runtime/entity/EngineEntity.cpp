@@ -1,8 +1,133 @@
 #include "runtime/entity/EngineEntity.h"
 
 #include "runtime/EngineEntityRuntime.h"
+#include "runtime/entity/damage/EngineDamageRuntime.h"
 
 #include <cmath>
+#include <cstddef>
+#include <mutex>
+
+namespace
+{
+	constexpr std::size_t kMaxDamageSubscriptions = 8;
+
+	struct DamageSubscription
+	{
+		const void *entity = nullptr;
+		ModEngineDamagePreHookFn pre = nullptr;
+		ModEngineDamagePostHookFn post = nullptr;
+	};
+
+	std::mutex g_subscriptionMutex;
+	DamageSubscription g_subscriptions[kMaxDamageSubscriptions]{};
+	std::size_t g_subscriptionCount = 0;
+
+	bool MatchesEvent(const DlModDamageEventV1 *event, const void *entity) noexcept
+	{
+		return event != nullptr && entity != nullptr && event->entity == entity;
+	}
+
+	/* 桥接回调：先按目标实体筛选，再把事件转发给订阅者。 */
+	uint8_t MODSDK_CALL BridgeDamagePre(DlModDamageEventV1 *event) noexcept
+	{
+		DamageSubscription matches[kMaxDamageSubscriptions]{};
+		std::size_t count = 0;
+		{
+			const std::lock_guard<std::mutex> guard(g_subscriptionMutex);
+			for (std::size_t index = 0; index < g_subscriptionCount; ++index)
+			{
+				if (MatchesEvent(event, g_subscriptions[index].entity))
+					matches[count++] = g_subscriptions[index];
+			}
+		}
+
+		uint8_t allow = 1;
+		for (std::size_t index = 0; index < count; ++index)
+		{
+			ModEngineDamagePreHookFn pre = matches[index].pre;
+			if (pre == nullptr)
+				continue;
+			try
+			{
+				if (pre(event) == 0)
+					allow = 0;
+			}
+			catch (...)
+			{
+			}
+		}
+		return allow;
+	}
+
+	void MODSDK_CALL BridgeDamagePost(const DlModDamageEventV1 *event) noexcept
+	{
+		DamageSubscription matches[kMaxDamageSubscriptions]{};
+		std::size_t count = 0;
+		{
+			const std::lock_guard<std::mutex> guard(g_subscriptionMutex);
+			for (std::size_t index = 0; index < g_subscriptionCount; ++index)
+			{
+				if (MatchesEvent(event, g_subscriptions[index].entity))
+					matches[count++] = g_subscriptions[index];
+			}
+		}
+
+		for (std::size_t index = 0; index < count; ++index)
+		{
+			ModEngineDamagePostHookFn post = matches[index].post;
+			if (post == nullptr)
+				continue;
+			try
+			{
+				post(event);
+			}
+			catch (...)
+			{
+			}
+		}
+	}
+
+	/* 安装伤害钩子；运行时重装说明上一轮已关闭，旧订阅指向的实体句柄不再可靠。 */
+	DlModResult EnsureDamageHooks() noexcept
+	{
+		const bool wasInstalled = EngineDamageRuntime::IsInstalled();
+		if (!EngineDamageRuntime::Install())
+			return DLMOD_RESULT_UNSUPPORTED_FEATURE;
+		if (!wasInstalled)
+		{
+			const std::lock_guard<std::mutex> guard(g_subscriptionMutex);
+			g_subscriptionCount = 0;
+			for (DamageSubscription &subscription : g_subscriptions)
+				subscription = {};
+		}
+		return DLMOD_RESULT_SUCCESS;
+	}
+
+	/* 以下两个辅助函数要求调用方持有 g_subscriptionMutex。 */
+	DlModResult EnsureBridgeRegistered() noexcept
+	{
+		if (EngineDamageRuntime::IsHookRegistered(&BridgeDamagePre, &BridgeDamagePost))
+			return DLMOD_RESULT_SUCCESS;
+		const DlModResult result =
+			EngineDamageRuntime::RegisterHook(&BridgeDamagePre, &BridgeDamagePost);
+		if (result == DLMOD_RESULT_INVALID_STATE &&
+			EngineDamageRuntime::IsHookRegistered(&BridgeDamagePre, &BridgeDamagePost))
+		{
+			return DLMOD_RESULT_SUCCESS;
+		}
+		return result;
+	}
+
+	void ReleaseBridgeWhenIdle() noexcept
+	{
+		if (g_subscriptionCount != 0 ||
+			!EngineDamageRuntime::IsHookRegistered(&BridgeDamagePre, &BridgeDamagePost))
+		{
+			return;
+		}
+		EngineDamageRuntime::UnregisterHook(&BridgeDamagePre, &BridgeDamagePost);
+	}
+}
 
 EngineEntity::EngineEntity(void *instance) noexcept : instance_(instance)
 {
@@ -47,6 +172,91 @@ DlModResult EngineEntity::ReadBoneByName(const char *name, DlModVector3V1 *posit
 {
 	DlModEntityV1 handle{instance_};
 	return EngineEntityRuntime::ReadBoneByName(&handle, name, position);
+}
+
+DlModResult EngineEntity::InstallDamageTracking() noexcept
+{
+	return EnsureDamageHooks();
+}
+
+bool EngineEntity::IsDamageTrackingInstalled() noexcept
+{
+	return EngineDamageRuntime::IsInstalled();
+}
+
+DlModResult EngineEntity::RegisterDamageHook(
+	ModEngineDamagePreHookFn pre,
+	ModEngineDamagePostHookFn post) noexcept
+{
+	if (pre == nullptr && post == nullptr)
+		return DLMOD_RESULT_INVALID_ARGUMENT;
+	const DlModResult ready = EnsureDamageHooks();
+	if (ready != DLMOD_RESULT_SUCCESS)
+		return ready;
+	return EngineDamageRuntime::RegisterHook(pre, post);
+}
+
+DlModResult EngineEntity::UnregisterDamageHook(
+	ModEngineDamagePreHookFn pre,
+	ModEngineDamagePostHookFn post) noexcept
+{
+	return EngineDamageRuntime::UnregisterHook(pre, post);
+}
+
+DlModResult EngineEntity::SubscribeDamage(
+	ModEngineDamagePreHookFn pre,
+	ModEngineDamagePostHookFn post) const noexcept
+{
+	if (instance_ == nullptr || (pre == nullptr && post == nullptr))
+		return DLMOD_RESULT_INVALID_ARGUMENT;
+	const DlModResult ready = EnsureDamageHooks();
+	if (ready != DLMOD_RESULT_SUCCESS)
+		return ready;
+
+	const std::lock_guard<std::mutex> guard(g_subscriptionMutex);
+	for (std::size_t index = 0; index < g_subscriptionCount; ++index)
+	{
+		const DamageSubscription &subscription = g_subscriptions[index];
+		if (subscription.entity == instance_ && subscription.pre == pre &&
+			subscription.post == post)
+		{
+			return DLMOD_RESULT_INVALID_STATE;
+		}
+	}
+	if (g_subscriptionCount >= kMaxDamageSubscriptions)
+		return DLMOD_RESULT_INVALID_STATE;
+
+	const DlModResult registered = EnsureBridgeRegistered();
+	if (registered != DLMOD_RESULT_SUCCESS)
+		return registered;
+	g_subscriptions[g_subscriptionCount] = DamageSubscription{instance_, pre, post};
+	++g_subscriptionCount;
+	return DLMOD_RESULT_SUCCESS;
+}
+
+DlModResult EngineEntity::UnsubscribeDamage(
+	ModEngineDamagePreHookFn pre,
+	ModEngineDamagePostHookFn post) const noexcept
+{
+	if (instance_ == nullptr)
+		return DLMOD_RESULT_INVALID_ARGUMENT;
+
+	const std::lock_guard<std::mutex> guard(g_subscriptionMutex);
+	for (std::size_t index = 0; index < g_subscriptionCount; ++index)
+	{
+		const DamageSubscription &subscription = g_subscriptions[index];
+		if (subscription.entity != instance_ || subscription.pre != pre ||
+			subscription.post != post)
+		{
+			continue;
+		}
+		g_subscriptions[index] = g_subscriptions[g_subscriptionCount - 1];
+		g_subscriptions[g_subscriptionCount - 1] = {};
+		--g_subscriptionCount;
+		ReleaseBridgeWhenIdle();
+		return DLMOD_RESULT_SUCCESS;
+	}
+	return DLMOD_RESULT_NOT_FOUND;
 }
 
 void *EngineEntity::FindLocalInstance() noexcept
