@@ -178,7 +178,8 @@ typedef struct DlModHunterSnapshotV1
 #define DLMOD_HUMAN_SNAPSHOT_V1_BASE_SIZE ((uint32_t)sizeof(DlModHumanSnapshotV1))
 #define DLMOD_HUNTER_SNAPSHOT_V1_BASE_SIZE ((uint32_t)sizeof(DlModHunterSnapshotV1))
 
-	/* 附近实体快照：kind 使用 DLMOD_ENTITY_KIND_*，position 由 validFields 标记。 */
+	/* 附近实体快照：kind 使用 DLMOD_ENTITY_KIND_*，position 由 validFields 标记。
+	   容量不足时优先返回角色（PLAYER/HUMAN/HUNTER/ZOMBIE），再补普通实体。 */
 	typedef struct DlModNearbyEntityV1
 	{
 		uint32_t structSize;

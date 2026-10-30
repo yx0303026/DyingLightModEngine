@@ -41,11 +41,38 @@
 | `+0x10` | bool | 状态机是否处于激活/本地控制 |
 | `+0x38` | int32 | `EZombieState`：0 Idle、1 SpitCharging、2 Spitting、3 Spitting_Recovery、4 Spitting_Empty、5 Howling、6 GroundPound、7 DefensiveSmoke、8 DefensiveSmokeEmpty、9 UvHeal_Anticipation、10 UvHeal、11 UvHeal_Recovery、12/13 BuggyCharge |
 | `+0x40` / `+0x44` | float | 当前状态计时 / 阈值 |
+| **`+0x70`** | **int32** | **防御烟雾剩余充能（-1 表示无限）**，`dec [rbx+70h]` 消耗 |
 | **`+0xA4`** | **float** | **光免疫剩余秒数（即“紫外线护盾”）** |
 | **`+0xA8`** | **uint8** | **UV 格挡标记（HUD 是否显示 UVBlock 图标）** |
 | `+0xCD` | bool | 防御烟雾已激活 |
 
 状态枚举名由 `0x180DD7500` 输出（`UvHeal_Anticipation` / `UvHeal` / `UvHeal_Recovery` 等）。
+
+充能读取方 `sub_180DD34B0`：`v = stateMachine[0x70]`，`v == -1` 直接返回，否则回调
+`owner->vtable[2592](owner, v)` 同步充能值——即 -1 是“无限充能”哨兵。
+
+### 2.1 充能与时长（`DW/Data0.pak: data/skills/zombie_levels.xml` / `zombie_skills.xml`）
+
+基础值（`EZombiePlayerParams`）：
+
+| 参数 | 枚举 | 基础值 | 说明 |
+| --- | --- | --- | --- |
+| `ZombieSpitDefensiveSmokeSpawnAmmoCount` | 756 | **1** | 出生态充能 |
+| `ZombieSpitDefensiveSmokeMaxAmmoCount` | 761 | **1** | 充能上限 |
+| `ZombieSpitDefensiveSmokeAmmoRegenTime1v1/2v1/3v1/4v1` | — | 80 / 50 / 40 / 30 s | 分人数回充时间 |
+| `ZombieSpitDefensiveSmokeDurationMul` | 762 | 1 | 烟雾持续时间倍率（非光免疫） |
+| `ZombieDefensiveSmokeLightInvulnerabilityDuration` | 734 | **2.5 s** | **防御烟雾的紫外线免疫时长** |
+| `ZombieGroundPoundLightInvulnerabilityDuration` | 735 | **0.8 s** | **捶地的紫外线免疫时长** |
+
+技能加成（`zombie_skills.xml`）：
+
+| 技能 | 层 | 效果 |
+| --- | --- | --- |
+| `DefensiveSmokeEnabled` | 7 | `ZombieDefensiveSmokeScreenEnabled = 1`，解锁烟雾 |
+| `DefensiveSmokeAmmo` | 8 | `ZombieSpitDefensiveSmokeMaxAmmoCount +1` → **上限 2 次** |
+| `DefensiveSmokeDuration` | 9 | `ZombieSpitDefensiveSmokeDurationMul +1`、`ZombieDefensiveSmokeLightInvulnerabilityDuration +2.1` → **4.6 s** |
+
+因此：**满技能时 2 次充能、每次 4.6 s 紫外线免疫；未点技能时 1 次、2.5 s；捶地固定 0.8 s。**
 
 ### 3. 写入点（钩子目标）
 
@@ -85,14 +112,19 @@
 新增 `EngineHunterUvShieldRuntime`（`include/tracking`、`src/tracking`）与
 `EngineHunterUvShield.asm` 四个跳板桩：
 
-1. **Timer 桩**（`0xDD98BD`）：读出待写入值 → 按模式改写 → 返回值交给跳板写回。
-2. **Client 桩**（`0xDD9977`）：仅应用 PIN / OFF，倍率只走主路径，避免同帧二次缩放。
-3. **Smoke 桩**（`0xDD87A2`）：按倍率缩放 `params[734]`。
-4. **GroundPound 桩**（`0xDDD5F9`）：按倍率缩放 `params[735]`。
+1. **Timer 桩**（`0xDD98BD`）：读出待写入值 → 按模式改写 → 返回值交给跳板写回；同时按需
+   把 `+0x70` 充能固定为设定值，并在 PIN 模式下点亮 `+0xA8`。
+2. **Client 桩**（`0xDD9977`）：仅应用 PIN / OFF 与充能固定，倍率只走主路径，避免同帧二次缩放。
+3. **Smoke 桩**（`0xDD87A2`）：绝对时长覆盖优先，其次按倍率缩放 `params[734]`。
+4. **GroundPound 桩**（`0xDDD5F9`）：绝对时长覆盖优先，其次按倍率缩放 `params[735]`。
 
 桩保存 `rbx`、全部易失 GPR、`rsp` 对齐、`xmm1..xmm5` 与 `rflags`；`xmm0`
 （客户端桩为 `xmm1`）保留回调返回值，由 MinHook 跳板重放原始 `movss` 指令写回。
 栈帧 0x80/0x70 字节，满足 Win64 影子空间与 16 字节对齐要求。
+
+充能没有独立写入钩子（`dec [rbx+70h]` 只有 3 字节，紧邻 `jnz rel8`，跳板重定位不稳），
+改为在同一次每帧触发的 Timer 桩里写 `+0x70`：游戏消耗充能后，本轮 Update 结束前即被
+拉回设定值，效果等价于“无限/固定充能”，且不会引入新的脆弱钩子点。
 
 ### ABI
 
@@ -101,10 +133,24 @@
 - `installUvShieldTracking()` / `isUvShieldTrackingInstalled()`
 - `readHunterUvShield(DlModHunterUvShieldV1*)`
 - `setHunterUvShield(mode, value)`
+- `setHunterUvShieldCharges(charges)` — `-1` 关闭覆盖；`0..99` 每帧把 `+0x70` 固定为该值
+- `setHunterUvShieldDuration(seconds)` — `<= 0` 关闭覆盖；否则激活时直接用该秒数替换配置值
 
-`DlModHunterUvShieldV1` 字段：`zombieState`、`shieldSeconds`、`shieldDuration`、
+`DlModHunterUvShieldV1` 字段：`zombieState`、`smokeCharges`、`shieldSeconds`、`shieldDuration`、
 `shieldFlag`、`stateMachine`、`readTimeSeconds`，由 `validFields`
 （`DLMOD_HUNTER_UV_HAS_*`）标记有效项。
+
+### 模组用法
+
+```cpp
+DlModHunterUvShieldV1 shield{};
+shield.structSize = sizeof(shield);
+shield.abiVersion = MODSDK_ABI_VERSION;
+api->installUvShieldTracking();                 // 也可用 installHunterTracking 顺带安装
+api->setHunterUvShieldCharges(-1);              // 无限充能（-1 为游戏原生哨兵）
+api->setHunterUvShieldDuration(0.0F);           // 0 = 使用游戏配置值
+api->readHunterUvShield(&shield);               // shield.smokeCharges / shieldSeconds / shieldDuration
+```
 
 模式：
 

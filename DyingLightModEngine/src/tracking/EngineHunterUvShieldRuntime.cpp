@@ -520,6 +520,7 @@ DlModResult EngineHunterUvShieldRuntime::SetOverride(
 			   ? DLMOD_RESULT_SUCCESS
 			   : DLMOD_RESULT_INVALID_STATE;
 }
+
 DlModResult EngineHunterUvShieldRuntime::SetChargeOverride(int32_t charges) noexcept
 {
 	if (charges < -1 || charges > kMaximumCharges)

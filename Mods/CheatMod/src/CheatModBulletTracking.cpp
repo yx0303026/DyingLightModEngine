@@ -21,7 +21,8 @@ namespace cheat_mod
 
 		constexpr std::uint64_t kAcquireIntervalMs = 100;
 		constexpr std::uint64_t kRefreshIntervalMs = 16;
-		constexpr std::size_t kMaximumNearbyEntities = 128;
+		/* 查询半径覆盖的静态物体很多，容量过小会把玩家/感染者挤出结果。 */
+		constexpr std::size_t kMaximumNearbyEntities = 1024;
 		constexpr float kMinimumSpeed = 0.001F;
 		constexpr float kMaximumDeltaSeconds = 0.1F;
 		constexpr float kMinimumTurnRadius = 0.0F;
@@ -378,6 +379,11 @@ namespace cheat_mod
 		stats_.kindMatches = kindCount_.load(std::memory_order_relaxed);
 		stats_.boneMatches = boneCount_.load(std::memory_order_relaxed);
 		stats_.projected = projectedCount_.load(std::memory_order_relaxed);
+		stats_.humans = humanCount_.load(std::memory_order_relaxed);
+		stats_.hunters = hunterCount_.load(std::memory_order_relaxed);
+		stats_.zombies = zombieCount_.load(std::memory_order_relaxed);
+		stats_.entities = entityCount_.load(std::memory_order_relaxed);
+		stats_.truncated = truncated_.load(std::memory_order_relaxed);
 	}
 
 	void CheatModBulletTracking::DrawOverlay() const noexcept
@@ -475,6 +481,11 @@ namespace cheat_mod
 		kindCount_.store(0, std::memory_order_relaxed);
 		boneCount_.store(0, std::memory_order_relaxed);
 		projectedCount_.store(0, std::memory_order_relaxed);
+		humanCount_.store(0, std::memory_order_relaxed);
+		hunterCount_.store(0, std::memory_order_relaxed);
+		zombieCount_.store(0, std::memory_order_relaxed);
+		entityCount_.store(0, std::memory_order_relaxed);
+		truncated_.store(0, std::memory_order_relaxed);
 		targetsFound_.store(0, std::memory_order_relaxed);
 		const float width = viewportWidth_.load(std::memory_order_relaxed);
 		const float height = viewportHeight_.load(std::memory_order_relaxed);
@@ -508,6 +519,9 @@ namespace cheat_mod
 			ClearTarget();
 			return;
 		}
+		truncated_.store(
+			query == DLMOD_RESULT_PARTIAL_SUCCESS ? 1U : 0U,
+			std::memory_order_relaxed);
 		if (count > kMaximumNearbyEntities)
 			count = static_cast<std::uint32_t>(kMaximumNearbyEntities);
 		nearbyCount_.store(count, std::memory_order_relaxed);
@@ -531,6 +545,10 @@ namespace cheat_mod
 		std::uint32_t kindMatches = 0;
 		std::uint32_t boneMatches = 0;
 		std::uint32_t projected = 0;
+		std::uint32_t humans = 0;
+		std::uint32_t hunters = 0;
+		std::uint32_t zombies = 0;
+		std::uint32_t entities = 0;
 		std::uint32_t bestKind = 0;
 		DlModEntityV1 bestEntity{};
 		DlModVector3V1 bestPoint{};
@@ -540,6 +558,22 @@ namespace cheat_mod
 		for (std::uint32_t index = 0; index < count; ++index)
 		{
 			const DlModNearbyEntityV1& item = nearby[index];
+			switch (item.kind)
+			{
+			case DLMOD_ENTITY_KIND_HUMAN:
+			case DLMOD_ENTITY_KIND_PLAYER:
+				++humans;
+				break;
+			case DLMOD_ENTITY_KIND_HUNTER:
+				++hunters;
+				break;
+			case DLMOD_ENTITY_KIND_ZOMBIE:
+				++zombies;
+				break;
+			default:
+				++entities;
+				break;
+			}
 			if ((item.validFields & DLMOD_ENTITY_HAS_POSITION) == 0 ||
 				!IsKindAllowed(item.kind))
 			{
@@ -595,6 +629,10 @@ namespace cheat_mod
 		kindCount_.store(kindMatches, std::memory_order_relaxed);
 		boneCount_.store(boneMatches, std::memory_order_relaxed);
 		projectedCount_.store(projected, std::memory_order_relaxed);
+		humanCount_.store(humans, std::memory_order_relaxed);
+		hunterCount_.store(hunters, std::memory_order_relaxed);
+		zombieCount_.store(zombies, std::memory_order_relaxed);
+		entityCount_.store(entities, std::memory_order_relaxed);
 		targetsFound_.store(found, std::memory_order_relaxed);
 
 		if (bestEntity.instance == nullptr)

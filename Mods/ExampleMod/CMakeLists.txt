@@ -20,6 +20,7 @@ endif()
 add_library(ExampleMod SHARED
     "src/ExampleMod.cpp"
     "../../DyingLightModEngine/include/sdk/EngineAbiTypes.h"
+    "../../DyingLightModEngine/include/sdk/EngineEntityAbi.h"
     "../../DyingLightModEngine/include/sdk/EngineHostAbi.h"
     "../../DyingLightModEngine/include/sdk/EngineModLifecycleAbi.h"
     "../../DyingLightModEngine/include/logging/EngineLogger.h"

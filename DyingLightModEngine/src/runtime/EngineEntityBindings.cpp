@@ -94,6 +94,22 @@ namespace
 		std::int32_t classDescriptorRva;
 		std::int32_t selfRva;
 	};
+
+	/* Base class array entries point at RTTIBaseClassDescriptor, whose first
+	   field is the TypeDescriptor RVA; the name is not stored inline here. */
+	std::uint32_t TypeDescriptorRva(
+		std::uintptr_t imageBase,
+		std::uint32_t imageSize,
+		std::uint32_t baseClassRva) noexcept
+	{
+		if (baseClassRva >= imageSize ||
+			imageSize - baseClassRva < sizeof(std::uint32_t))
+		{
+			return 0;
+		}
+		return *reinterpret_cast<const std::uint32_t *>(
+			imageBase + baseClassRva);
+	}
 }
 
 HMODULE EngineEntityBindings::GameModule() noexcept
@@ -156,10 +172,11 @@ bool EngineEntityBindings::IsDerivedFrom(
 		const auto *bases = reinterpret_cast<const std::uint32_t *>(imageBase + arrayRva);
 		for (std::uint32_t index = 0; index < count; ++index)
 		{
-			const std::uint32_t descriptorRva = bases[index];
-			if (descriptorRva >= imageSize ||
+			const std::uint32_t descriptorRva =
+				TypeDescriptorRva(imageBase, imageSize, bases[index]);
+			if (descriptorRva == 0 ||
 				imageSize - descriptorRva < className.size() + 21)
-				return false;
+				continue;
 			const char *name = reinterpret_cast<const char *>(imageBase + descriptorRva + 16);
 			if (name[0] == '.' && name[1] == '?' && name[2] == 'A' &&
 				(name[3] == 'V' || name[3] == 'U') &&
@@ -215,8 +232,9 @@ bool EngineEntityBindings::ReadTypeName(
 			return false;
 		}
 		const auto *bases = reinterpret_cast<const std::uint32_t *>(imageBase + arrayRva);
-		const std::uint32_t descriptorRva = bases[0];
-		if (descriptorRva >= imageSize || imageSize - descriptorRva < 17)
+		const std::uint32_t descriptorRva =
+			TypeDescriptorRva(imageBase, imageSize, bases[0]);
+		if (descriptorRva == 0 || imageSize - descriptorRva < 17)
 			return false;
 		const char *name = reinterpret_cast<const char *>(imageBase + descriptorRva + 16);
 		for (std::size_t index = 0; index + 1 < capacity; ++index)

@@ -33,6 +33,13 @@ namespace cheat_mod
 		std::uint32_t kindMatches = 0;
 		std::uint32_t boneMatches = 0;
 		std::uint32_t projected = 0;
+		/* 枚举结果的原始种类分布，用于确认查询是否只命中静态物体。 */
+		std::uint32_t humans = 0;
+		std::uint32_t hunters = 0;
+		std::uint32_t zombies = 0;
+		std::uint32_t entities = 0;
+		/* 枚举结果被容量截断时为 1。 */
+		std::uint32_t truncated = 0;
 	};
 
 	// 子弹追踪：在引擎弹丸回调内锁定目标并修正弹道，在渲染帧绘制准星标记。
@@ -144,6 +151,11 @@ namespace cheat_mod
 		std::atomic<std::uint32_t> kindCount_{ 0 };
 		std::atomic<std::uint32_t> boneCount_{ 0 };
 		std::atomic<std::uint32_t> projectedCount_{ 0 };
+		std::atomic<std::uint32_t> humanCount_{ 0 };
+		std::atomic<std::uint32_t> hunterCount_{ 0 };
+		std::atomic<std::uint32_t> zombieCount_{ 0 };
+		std::atomic<std::uint32_t> entityCount_{ 0 };
+		std::atomic<std::uint32_t> truncated_{ 0 };
 
 		/* 仅游戏线程访问。 */
 		std::uint64_t lastAcquireTick_ = 0;

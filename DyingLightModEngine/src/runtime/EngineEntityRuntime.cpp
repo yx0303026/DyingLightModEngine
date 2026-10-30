@@ -607,7 +607,9 @@ const DlModEntityApiV1 *EngineEntityRuntime::GetApi() noexcept
 		&InstallUvShieldTracking,
 		&IsUvShieldTrackingInstalled,
 		&ReadHunterUvShield,
-		&SetHunterUvShield};
+		&SetHunterUvShield,
+		&SetHunterUvShieldCharges,
+		&SetHunterUvShieldDuration};
 #if defined(_M_X64)
 	return EngineEntityBindings::Resolve() != nullptr ? &api : nullptr;
 #else
@@ -945,7 +947,17 @@ DlModResult MODSDK_CALL EngineEntityRuntime::SetHunterUvShield(
 	return EngineHunterUvShieldRuntime::SetOverride(mode, value);
 }
 
-DlModResult MODSDK_CALL EngineEntityRuntime::SetHunterUvShieldCharges( 	int32_t charges) noexcept { 	return EngineHunterUvShieldRuntime::SetChargeOverride(charges); }  DlModResult MODSDK_CALL EngineEntityRuntime::SetHunterUvShieldDuration( 	float seconds) noexcept { 	return EngineHunterUvShieldRuntime::SetDurationOverride(seconds); }
+DlModResult MODSDK_CALL EngineEntityRuntime::SetHunterUvShieldCharges(
+	int32_t charges) noexcept
+{
+	return EngineHunterUvShieldRuntime::SetChargeOverride(charges);
+}
+
+DlModResult MODSDK_CALL EngineEntityRuntime::SetHunterUvShieldDuration(
+	float seconds) noexcept
+{
+	return EngineHunterUvShieldRuntime::SetDurationOverride(seconds);
+}
 
 DlModResult MODSDK_CALL EngineEntityRuntime::EnumerateNearby(
 	const DlModVector3V1 *center,
@@ -992,33 +1004,49 @@ DlModResult MODSDK_CALL EngineEntityRuntime::EnumerateNearby(
 	}
 
 	std::uint32_t written = 0;
-	for (std::uint32_t index = 0;
-		 index < collection.count && written < capacity;
-		 ++index)
+	/* 空间查询会先返回大量静态物体；容量不足时优先保留角色，
+	   否则玩家/感染者会被道具挤出结果。 */
+	const auto writePass = [&](bool actorsOnly)
 	{
-		void *control = nullptr;
-		if (!ReadField(collection.items, index * sizeof(void *), control) ||
-			control == nullptr)
+		for (std::uint32_t index = 0;
+			 index < collection.count && written < capacity;
+			 ++index)
 		{
-			continue;
+			void *control = nullptr;
+			if (!ReadField(
+					collection.items, index * sizeof(void *), control) ||
+				control == nullptr)
+			{
+				continue;
+			}
+			auto *entity = static_cast<std::uint8_t *>(control) -
+						   EngineEntityBindings::ControlObjectOffset;
+			const std::uint32_t kind = EntityKindOf(entity);
+			const bool isActor =
+				kind == DLMOD_ENTITY_KIND_PLAYER ||
+				kind == DLMOD_ENTITY_KIND_HUMAN ||
+				kind == DLMOD_ENTITY_KIND_HUNTER ||
+				kind == DLMOD_ENTITY_KIND_ZOMBIE;
+			if (actorsOnly != isActor)
+				continue;
+			DlModNearbyEntityV1 item{};
+			item.structSize = sizeof(DlModNearbyEntityV1);
+			item.kind = kind;
+			item.identity = static_cast<std::uint64_t>(
+				reinterpret_cast<std::uintptr_t>(entity));
+			item.entity.instance = entity;
+			DlModVector3V1 position{};
+			if (ReadPosition(*bindings, entity, position))
+			{
+				item.position = position;
+				item.validFields |= DLMOD_ENTITY_HAS_POSITION;
+			}
+			entities[written] = item;
+			++written;
 		}
-		auto *entity = static_cast<std::uint8_t *>(control) -
-					   EngineEntityBindings::ControlObjectOffset;
-		DlModNearbyEntityV1 item{};
-		item.structSize = sizeof(DlModNearbyEntityV1);
-		item.kind = EntityKindOf(entity);
-		item.identity = static_cast<std::uint64_t>(
-			reinterpret_cast<std::uintptr_t>(entity));
-		item.entity.instance = entity;
-		DlModVector3V1 position{};
-		if (ReadPosition(*bindings, entity, position))
-		{
-			item.position = position;
-			item.validFields |= DLMOD_ENTITY_HAS_POSITION;
-		}
-		entities[written] = item;
-		++written;
-	}
+	};
+	writePass(true);
+	writePass(false);
 	FreeGameBuffer(collection.items);
 	*count = written;
 	return written < collection.count

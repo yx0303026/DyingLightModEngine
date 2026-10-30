@@ -1,8 +1,31 @@
 # Example Mod
 
 Example Mod is a small loadable mod for Dying Light Mod Engine. It demonstrates
-the Mod SDK descriptor, ABI version check, host logging callback, and load and
-unload callbacks.
+the Mod SDK descriptor, ABI version check, host logging callback, load and
+unload callbacks, per-frame rendering callbacks, and the entity API.
+
+## UV Shield Skill (Be the Zombie)
+
+On load the mod installs the engine's hunter UV shield hooks and turns the Night
+Hunter's UV immunity into a toggleable skill:
+
+- Press **F3** to toggle the shield.
+- Charges are removed (`setHunterUvShieldCharges(99)` re-pinned every frame).
+- A full energy bar keeps the shield up for **10 seconds**.
+- While the shield is off the bar recharges from empty to full in **15 seconds**.
+- When energy reaches zero the shield switches off automatically and recharges.
+
+The mod drives the engine through `DlModEntityApiV1`:
+
+```cpp
+entity->installUvShieldTracking();
+entity->setHunterUvShieldCharges(99);
+entity->setHunterUvShield(DLMOD_HUNTER_UV_SHIELD_MODE_PIN, energy * 10.0F);
+entity->setHunterUvShield(DLMOD_HUNTER_UV_SHIELD_MODE_OFF, 0.0F);
+```
+
+Energy is only consumed or refilled while a Be the Zombie hunter is active, so
+the campaign is unaffected.
 
 ## Build
 

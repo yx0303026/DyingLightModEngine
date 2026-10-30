@@ -1,15 +1,151 @@
-#include "sdk/EngineModLifecycleAbi.h"
+#include "sdk/EngineEntityAbi.h"
 #include "sdk/EngineHostAbi.h"
+#include "sdk/EngineModLifecycleAbi.h"
 #include "logging/EngineLogger.h"
 
+#include <Windows.h>
+
+#include <algorithm>
+#include <cstdint>
+#include <cstdio>
+
 namespace {
+
+	/* 紫外线护盾改为可开关技能：满能量维持 10 秒，关闭后 15 秒回满，充能次数不再受限。 */
+	constexpr float kShieldFullDurationSeconds = 10.0F;
+	constexpr float kShieldFullRechargeSeconds = 15.0F;
+	constexpr std::int32_t kUnlimitedCharges = 99;
+	constexpr int kShieldToggleKey = VK_F3;
+	constexpr float kMaximumFrameSeconds = 0.1F;
 
 	struct ExampleModState {
 		void* hostContext = nullptr;
 		EngineLogCallback hostLog = nullptr;
+		const DlModEntityApiV1* entity = nullptr;
+		bool uvShieldAvailable = false;
+		bool shieldEnabled = false;
+		bool toggleKeyDown = false;
+		bool depletionLogged = false;
+		float energy = 1.0F;
+		ULONGLONG lastTickMs = 0;
 	};
 
 	ExampleModState g_exampleModState;
+
+	void Log(EngineLogLevel level, const char* message)
+	{
+		if (g_exampleModState.hostLog == nullptr) {
+			return;
+		}
+		g_exampleModState.hostLog(
+			g_exampleModState.hostContext,
+			static_cast<uint32_t>(level),
+			message);
+	}
+
+	void LogPercent(EngineLogLevel level, const char* format, float ratio)
+	{
+		char buffer[160]{};
+		std::snprintf(buffer, sizeof(buffer), format, static_cast<double>(ratio) * 100.0);
+		Log(level, buffer);
+	}
+
+	bool IsHunterActive()
+	{
+		const ExampleModState& state = g_exampleModState;
+		if (state.entity == nullptr || !state.uvShieldAvailable ||
+			state.entity->readHunterUvShield == nullptr) {
+			return false;
+		}
+		DlModHunterUvShieldV1 snapshot{};
+		snapshot.structSize = sizeof(snapshot);
+		snapshot.abiVersion = MODSDK_ABI_VERSION;
+		return state.entity->readHunterUvShield(&snapshot) == DLMOD_RESULT_SUCCESS;
+	}
+
+	/* 技能开启时用 PIN 把光免疫计时钉在剩余能量对应的秒数上，关闭时强制清零。 */
+	void ApplyShieldState()
+	{
+		ExampleModState& state = g_exampleModState;
+		if (state.entity == nullptr || !state.uvShieldAvailable) {
+			return;
+		}
+		state.entity->setHunterUvShieldCharges(kUnlimitedCharges);
+		if (state.shieldEnabled && state.energy > 0.0F) {
+			state.entity->setHunterUvShield(
+				DLMOD_HUNTER_UV_SHIELD_MODE_PIN,
+				state.energy * kShieldFullDurationSeconds);
+		}
+		else {
+			state.entity->setHunterUvShield(DLMOD_HUNTER_UV_SHIELD_MODE_OFF, 0.0F);
+		}
+	}
+
+	void ToggleShield()
+	{
+		ExampleModState& state = g_exampleModState;
+		if (state.shieldEnabled) {
+			state.shieldEnabled = false;
+			state.depletionLogged = false;
+			LogPercent(EngineLogLevel::Info, "UV shield disabled (energy %.0f%%).", state.energy);
+			return;
+		}
+		if (state.energy <= 0.0F) {
+			Log(EngineLogLevel::Warning, "UV shield cannot be enabled: energy is empty.");
+			return;
+		}
+		state.shieldEnabled = true;
+		state.depletionLogged = false;
+		LogPercent(EngineLogLevel::Info, "UV shield enabled (energy %.0f%%).", state.energy);
+	}
+
+	void UpdateEnergy(float deltaSeconds)
+	{
+		ExampleModState& state = g_exampleModState;
+		if (state.shieldEnabled) {
+			state.energy -= deltaSeconds / kShieldFullDurationSeconds;
+			if (state.energy <= 0.0F) {
+				state.energy = 0.0F;
+				state.shieldEnabled = false;
+				if (!state.depletionLogged) {
+					state.depletionLogged = true;
+					Log(EngineLogLevel::Info, "UV shield depleted and recharging.");
+				}
+			}
+			return;
+		}
+		state.energy = (std::min)(1.0F, state.energy + deltaSeconds / kShieldFullRechargeSeconds);
+	}
+
+	void MODSDK_CALL OnRenderFrame(void* modContext, void* graphicsContext)
+	{
+		(void)graphicsContext;
+		ExampleModState& state = g_exampleModState;
+		if (modContext != &state) {
+			return;
+		}
+
+		const ULONGLONG now = GetTickCount64();
+		float deltaSeconds = 0.0F;
+		if (state.lastTickMs != 0) {
+			deltaSeconds = static_cast<float>(now - state.lastTickMs) / 1000.0F;
+			deltaSeconds = (std::min)(deltaSeconds, kMaximumFrameSeconds);
+		}
+		state.lastTickMs = now;
+
+		const bool keyDown = (GetAsyncKeyState(kShieldToggleKey) & 0x8000) != 0;
+		if (keyDown && !state.toggleKeyDown) {
+			ToggleShield();
+		}
+		state.toggleKeyDown = keyDown;
+
+		/* 只在 BTZ 猎手存在时消耗/恢复能量，避免战役模式空转。 */
+		if (!IsHunterActive()) {
+			return;
+		}
+		UpdateEnergy(deltaSeconds);
+		ApplyShieldState();
+	}
 
 	DlModResult MODSDK_CALL OnLoad(void* modContext, const DlModHostApiV1* hostApi)
 	{
@@ -21,12 +157,32 @@ namespace {
 			return DLMOD_RESULT_INVALID_ARGUMENT;
 		}
 
-		g_exampleModState.hostContext = hostApi->context;
-		g_exampleModState.hostLog = hostApi->log;
-		g_exampleModState.hostLog(
-			g_exampleModState.hostContext,
+		ExampleModState& state = g_exampleModState;
+		state.hostContext = hostApi->context;
+		state.hostLog = hostApi->log;
+		state.hostLog(
+			state.hostContext,
 			static_cast<uint32_t>(EngineLogLevel::Info),
 			"Example Mod loaded successfully.");
+		state.energy = 1.0F;
+
+		if (hostApi->structSize >= DLMOD_HOST_API_V1_ENTITY_SIZE &&
+			hostApi->entity != nullptr &&
+			hostApi->entity->structSize >= DLMOD_ENTITY_API_V1_UV_SHIELD_SIZE &&
+			hostApi->entity->installUvShieldTracking != nullptr) {
+			state.entity = hostApi->entity;
+			state.uvShieldAvailable =
+				state.entity->installUvShieldTracking() == DLMOD_RESULT_SUCCESS;
+			if (state.uvShieldAvailable) {
+				Log(EngineLogLevel::Info, "UV shield hooks installed. Press F3 to toggle.");
+			}
+			else {
+				Log(EngineLogLevel::Warning, "UV shield hooks are unavailable for this game build.");
+			}
+		}
+		else {
+			Log(EngineLogLevel::Warning, "Entity API does not expose UV shield control.");
+		}
 		return DLMOD_RESULT_SUCCESS;
 	}
 
@@ -36,9 +192,16 @@ namespace {
 			return;
 		}
 
-		if (g_exampleModState.hostLog != nullptr) {
-			g_exampleModState.hostLog(
-				g_exampleModState.hostContext,
+		ExampleModState& state = g_exampleModState;
+		if (state.entity != nullptr && state.uvShieldAvailable) {
+			state.entity->setHunterUvShield(DLMOD_HUNTER_UV_SHIELD_MODE_GAME, 0.0F);
+			state.entity->setHunterUvShieldCharges(-1);
+			state.entity->setHunterUvShieldDuration(0.0F);
+		}
+
+		if (state.hostLog != nullptr) {
+			state.hostLog(
+				state.hostContext,
 				static_cast<uint32_t>(EngineLogLevel::Info),
 				"Example Mod unloaded.");
 		}
@@ -67,7 +230,8 @@ extern "C" DlModResult MODSDK_CALL ModSDK_QueryMod(
 		&g_exampleModState,
 		&OnLoad,
 		&OnUnload,
-		"ExampleMod"
+		"ExampleMod",
+		&OnRenderFrame
 	};
 	return DLMOD_RESULT_SUCCESS;
 }

@@ -326,6 +326,11 @@ namespace cheat_mod {
 				" | Adjusted " + std::to_string(stats.adjusted) +
 				" | Targets " + std::to_string(stats.targetsFound) +
 				"\nNearby " + std::to_string(stats.nearby) +
+				(stats.truncated != 0 ? "+" : "") +
+				" (H:" + std::to_string(stats.humans) +
+				" N:" + std::to_string(stats.hunters) +
+				" Z:" + std::to_string(stats.zombies) +
+				" E:" + std::to_string(stats.entities) + ")" +
 				" | Kind " + std::to_string(stats.kindMatches) +
 				" | Bone " + std::to_string(stats.boneMatches) +
 				" | Proj " + std::to_string(stats.projected));
