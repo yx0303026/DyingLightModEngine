@@ -11,6 +11,8 @@ endif()
 
 project(DyingLightModSuite LANGUAGES CXX)
 
+include(CTest)
+
 # 包含子项目。
 add_subdirectory("DyingLightModEngine")
 add_subdirectory("DyingLightDsoundProxy")
@@ -18,3 +20,4 @@ add_subdirectory("Mods/ExampleMod")
 add_subdirectory("Mods/CustomPakMod")
 add_subdirectory("Mods/CheatMod")
 add_subdirectory("Mods/PlayerNameMask")
+add_subdirectory("DyingLightUITool")
