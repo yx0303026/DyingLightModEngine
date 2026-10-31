@@ -17,4 +17,5 @@ public:
 	static DlModResult RegisterHooks(
 		const DlModHunterUvShieldHookDescV1 &desc) noexcept;
 	static DlModResult UnregisterHooks() noexcept;
+	static DlModResult SetTimer(void *stateMachine, float seconds) noexcept;
 };

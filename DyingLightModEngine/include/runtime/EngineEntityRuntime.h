@@ -106,6 +106,9 @@ private:
 	static DlModResult MODSDK_CALL RegisterHunterUvShieldHooks(
 		const DlModHunterUvShieldHookDescV1 *desc) noexcept;
 	static DlModResult MODSDK_CALL UnregisterHunterUvShieldHooks() noexcept;
+	static DlModResult MODSDK_CALL SetHunterUvShieldTimer(
+		void *stateMachine,
+		float seconds) noexcept;
 	static DlModResult MODSDK_CALL InstallDamageTracking() noexcept;
 	static uint8_t MODSDK_CALL IsDamageTrackingInstalled() noexcept;
 	static DlModResult MODSDK_CALL RegisterDamageHook(

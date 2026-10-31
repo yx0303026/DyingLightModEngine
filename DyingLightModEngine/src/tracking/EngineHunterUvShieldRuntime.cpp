@@ -1050,3 +1050,29 @@ DlModResult EngineHunterUvShieldRuntime::UnregisterHooks() noexcept
 	ReleaseSRWLockExclusive(&g_hookStateLock);
 	return DLMOD_RESULT_SUCCESS;
 }
+
+DlModResult EngineHunterUvShieldRuntime::SetTimer(
+	void *stateMachine,
+	float seconds) noexcept
+{
+	if (stateMachine == nullptr || !std::isfinite(seconds) || seconds < 0.0F)
+		return DLMOD_RESULT_INVALID_ARGUMENT;
+	if (!g_installed.load(std::memory_order_acquire))
+		return DLMOD_RESULT_INVALID_STATE;
+
+	const float sanitized = SanitizeShieldSeconds(seconds);
+	if (!WriteField(
+			stateMachine,
+			EngineEntityBindings::ZombieStateMachineShieldSecondsOffset,
+			sanitized))
+	{
+		return DLMOD_RESULT_INVALID_ARGUMENT;
+	}
+	const std::uint8_t flag = sanitized > 0.0F ? 1U : 0U;
+	WriteField(
+		stateMachine,
+		EngineEntityBindings::ZombieStateMachineShieldFlagOffset,
+		flag);
+	RecordObservation(stateMachine, sanitized, sanitized > 0.0F);
+	return DLMOD_RESULT_SUCCESS;
+}

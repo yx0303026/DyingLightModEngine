@@ -95,6 +95,9 @@ extern "C"
 	typedef DlModResult(MODSDK_CALL *ModEngineRegisterHunterUvShieldHooksFn)(
 		const DlModHunterUvShieldHookDescV1 *desc);
 	typedef DlModResult(MODSDK_CALL *ModEngineUnregisterHunterUvShieldHooksFn)(void);
+	typedef DlModResult(MODSDK_CALL *ModEngineSetHunterUvShieldTimerFn)(
+		void *stateMachine,
+		float seconds);
 
 	/* 紫外线护盾快照：shieldSeconds 为状态机上的光免疫剩余秒数，shieldFlag 为 HUD 紫外格挡标记，
 	   smokeCharges 为防御烟雾剩余充能（状态机 +0x70），shieldDuration 为最近一次激活的时长。 */
@@ -432,6 +435,7 @@ typedef struct DlModHunterSnapshotV1
 		ModEngineSetHunterUvShieldProgressFn setHunterUvShieldProgress;
 		ModEngineRegisterHunterUvShieldHooksFn registerHunterUvShieldHooks;
 		ModEngineUnregisterHunterUvShieldHooksFn unregisterHunterUvShieldHooks;
+		ModEngineSetHunterUvShieldTimerFn setHunterUvShieldTimer;
 		ModEngineInstallDamageTrackingFn installDamageTracking;
 		ModEngineIsDamageTrackingInstalledFn isDamageTrackingInstalled;
 		ModEngineRegisterDamageHookFn registerDamageHook;
@@ -454,6 +458,8 @@ typedef struct DlModHunterSnapshotV1
 	((uint32_t)(offsetof(DlModEntityApiV1, setHunterUvShieldProgress) + sizeof(ModEngineSetHunterUvShieldProgressFn)))
 #define DLMOD_ENTITY_API_V1_UV_HOOK_SIZE \
 	((uint32_t)(offsetof(DlModEntityApiV1, unregisterHunterUvShieldHooks) + sizeof(ModEngineUnregisterHunterUvShieldHooksFn)))
+#define DLMOD_ENTITY_API_V1_UV_TIMER_SIZE \
+	((uint32_t)(offsetof(DlModEntityApiV1, setHunterUvShieldTimer) + sizeof(ModEngineSetHunterUvShieldTimerFn)))
 #define DLMOD_ENTITY_API_V1_DAMAGE_SIZE \
 	((uint32_t)(offsetof(DlModEntityApiV1, unregisterDamageHook) + sizeof(ModEngineUnregisterDamageHookFn)))
 #define DLMOD_ENTITY_API_V1_AIM_SIZE \

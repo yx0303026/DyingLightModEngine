@@ -996,6 +996,7 @@ const DlModEntityApiV1 *EngineEntityRuntime::GetApi() noexcept
 		&SetHunterUvShieldProgress,
 		&RegisterHunterUvShieldHooks,
 		&UnregisterHunterUvShieldHooks,
+		&SetHunterUvShieldTimer,
 		&InstallDamageTracking,
 		&IsDamageTrackingInstalled,
 		&RegisterDamageHook,
@@ -1553,6 +1554,13 @@ DlModResult MODSDK_CALL EngineEntityRuntime::RegisterHunterUvShieldHooks(
 DlModResult MODSDK_CALL EngineEntityRuntime::UnregisterHunterUvShieldHooks() noexcept
 {
 	return EngineHunterUvShieldRuntime::UnregisterHooks();
+}
+
+DlModResult MODSDK_CALL EngineEntityRuntime::SetHunterUvShieldTimer(
+	void *stateMachine,
+	float seconds) noexcept
+{
+	return EngineHunterUvShieldRuntime::SetTimer(stateMachine, seconds);
 }
 
 DlModResult MODSDK_CALL EngineEntityRuntime::InstallDamageTracking() noexcept
