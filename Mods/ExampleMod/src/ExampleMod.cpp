@@ -121,6 +121,20 @@ namespace {
 		(void)sourceDuration;
 	}
 
+	void EndCustomShield(ExampleModState& state)
+	{
+		if (!state.shieldActive) {
+			return;
+		}
+		state.shieldActive = false;
+		state.remainingSeconds = 0.0F;
+		SetCustomTimer(state, 0.0F);
+		LogPercent(
+			EngineLogLevel::Info,
+			"自定义紫外线护盾手动关闭，当前能量 %.0f%%。",
+			state.energy);
+	}
+
 	uint8_t MODSDK_CALL OnUvShieldStart(
 		void* stateMachine,
 		uint32_t source,
@@ -135,6 +149,12 @@ namespace {
 			return 1U;
 		}
 
+		/* 同一个原版技能再次触发时切换为关闭，而不是重新开始护盾。 */
+		if (state->shieldActive) {
+			EndCustomShield(*state);
+			state->lastTickMs = GetTickCount64();
+			return 0U;
+		}
 		BeginCustomShield(*state, stateMachine, durationSeconds);
 		state->lastTickMs = GetTickCount64();
 		return 0U;

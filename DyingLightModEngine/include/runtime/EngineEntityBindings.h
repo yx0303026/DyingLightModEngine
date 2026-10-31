@@ -118,8 +118,7 @@ public:
 	/* HudZombieAbilities 容器更新入口：容器 + 0x68 为能力项数量，+ 0x60 + 4 * sizeof(void*)
 	   处缓存 UVBlock（索引 4）能力项指针。游戏每帧最多刷新 5 个猎手能力项。 */
 	static constexpr std::uintptr_t HunterUvShieldHudContainerSiteRva = 0x5C66C0;
-	/* 单个能力项更新点：+0x28 为 I_Fill 进度条、+0x30 为 T_AmmoCount 文本，
-	   引擎通过 IUIElement::SetVisible 隐藏这两项以去除原版护盾读数。 */
+	/* 单个能力项更新点：+0x14 控制图标显示，+0x28 为进度条，+0x30 为充能文本。 */
 	static constexpr std::uintptr_t HunterUvShieldHudAbilitySiteRva = 0x5C6B80;
 	/* gamedll IAT 槽位，存放 IUIElement::SetVisible(this, bool) 的解析地址。 */
 	static constexpr std::uintptr_t UiElementSetVisibleImportRva = 0x137C500;

@@ -680,20 +680,27 @@ extern "C" void __fastcall EngineEntity_OnHunterUvShieldHudAbility(
 	}
 	if (useOverride)
 	{
-		/* data + 0x0C 是该能力项的环形进度，data + 0x14 控制图标可见性。 */
+		/* 保留进度覆盖数据，但始终清除图标可见标记。 */
 		const float clampedRatio = (std::min)((std::max)(ratio, 0.0F), 1.0F);
-		const std::uint8_t visible = 1;
 		WriteField(data, 0x0C, clampedRatio);
-		WriteField(data, 0x14, visible);
+	}
+	if (isShieldAbility && data != nullptr)
+	{
+		const std::uint8_t hidden = 0;
+		WriteField(data, 0x14, hidden);
 	}
 
 	original(ability, data);
 	if (isShieldAbility)
 	{
-		/* 原生更新会把 -1/充能数量写回文本；护盾 HUD 只保留图标和进度。 */
-		SetHunterUvShieldHudNumberVisible(ability, !useOverride);
-		if (useOverride)
-			SetHunterUvShieldHudFillVisible(ability, true);
+		/* 原生更新后再次隐藏三层控件，避免控件被重新点亮。 */
+		if (data != nullptr)
+		{
+			const std::uint8_t hidden = 0;
+			WriteField(data, 0x14, hidden);
+		}
+		SetHunterUvShieldHudNumberVisible(ability, false);
+		SetHunterUvShieldHudFillVisible(ability, false);
 	}
 }
 

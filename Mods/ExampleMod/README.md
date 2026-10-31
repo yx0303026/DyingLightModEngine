@@ -13,6 +13,8 @@ Night Hunter's UV immunity lifecycle:
 - Defensive smoke and ground pound start events are intercepted automatically.
 - The mod blocks the original UV shield write and starts its own six-second
   energy-based shield.
+- Triggering the same skill again while the custom shield is active closes it
+  immediately and starts energy recovery.
 - The original UV timer update path remains observable, but the mod rewrites
   the timer with its own remaining time each frame.
 - No custom hotkey is registered.
