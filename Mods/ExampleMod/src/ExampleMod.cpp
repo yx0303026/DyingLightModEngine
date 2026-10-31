@@ -12,7 +12,7 @@
 
 namespace {
 
-	/* 紫外线护盾改为可开关技能：满能量维持 10 秒，关闭后 15 秒回满，充能次数不再受限。 */
+	/* 紫外线护盾改为可开关技能：满能量维持 6 秒，关闭后 20 秒回满，充能次数不再受限。 */
 	constexpr float kShieldFullDurationSeconds = 6.0F;
 	constexpr float kShieldFullRechargeSeconds = 20.0F;
 	constexpr std::int32_t kUnlimitedCharges = -2;
@@ -185,7 +185,7 @@ namespace {
 			state.uvShieldAvailable =
 				state.entity->installUvShieldTracking() == DLMOD_RESULT_SUCCESS;
 			if (state.uvShieldAvailable) {
-				Log(EngineLogLevel::Info, "UV shield hooks installed. Press V to toggle.");
+				Log(EngineLogLevel::Info, "UV shield hooks installed. Press F7 to toggle.");
 			}
 			else {
 				Log(EngineLogLevel::Warning, "UV shield hooks are unavailable for this game build.");

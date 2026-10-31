@@ -14,8 +14,8 @@ Hunter's UV immunity into a toggleable skill:
   the game's native key binding settings, where it can be rebound.
 - The charge number is hidden using the game's unlimited-charge sentinel.
 - The HUD progress ring tracks shield energy instead of the hunter's UV resistance.
-- A full energy bar keeps the shield up for **10 seconds**.
-- While the shield is off the bar recharges from empty to full in **15 seconds**.
+- A full energy bar keeps the shield up for **6 seconds**.
+- While the shield is off the bar recharges from empty to full in **20 seconds**.
 - When energy reaches zero the shield switches off automatically and recharges.
 
 The mod drives the engine through `DlModEntityApiV1`:
@@ -24,7 +24,7 @@ The mod drives the engine through `DlModEntityApiV1`:
 entity->installUvShieldTracking();
 entity->setHunterUvShieldCharges(-2);
 entity->setHunterUvShieldProgress(energy);
-entity->setHunterUvShield(DLMOD_HUNTER_UV_SHIELD_MODE_PIN, energy * 10.0F);
+entity->setHunterUvShield(DLMOD_HUNTER_UV_SHIELD_MODE_PIN, energy * 6.0F);
 entity->setHunterUvShield(DLMOD_HUNTER_UV_SHIELD_MODE_OFF, 0.0F);
 ```
 
