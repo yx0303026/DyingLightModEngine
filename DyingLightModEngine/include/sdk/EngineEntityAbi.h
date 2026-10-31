@@ -420,6 +420,7 @@ typedef struct DlModHunterSnapshotV1
 		int32_t charges);
 	typedef DlModResult(MODSDK_CALL *ModEngineSetHunterUvShieldDurationFn)(
 		float seconds);
+	/* 设置原生猎手 HUD 能量条比例；-1 隐藏自定义条，0..1 更新白色填充。 */
 	typedef DlModResult(MODSDK_CALL *ModEngineSetHunterUvShieldProgressFn)(
 		float ratio);
 	/* 受伤回调：安装两个 HealthModule::AddDamageToBody 跳板，并按需注册前置/后置回调。 */

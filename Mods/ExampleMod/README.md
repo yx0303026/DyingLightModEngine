@@ -19,7 +19,7 @@ Night Hunter's UV immunity lifecycle:
   the timer with its own remaining time each frame.
 - No custom hotkey is registered.
 - The charge number is hidden using the game's unlimited-charge sentinel.
-- The HUD progress ring tracks shield energy instead of the hunter's UV resistance.
+- A native black bar with white fill appears below the hunter's energy bar and tracks custom shield energy.
 - A full energy bar keeps the shield up for **6 seconds**.
 - While the shield is off the bar recharges from empty to full in **20 seconds**.
 - When energy reaches zero the shield switches off automatically and recharges.

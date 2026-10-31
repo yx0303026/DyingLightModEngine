@@ -92,6 +92,9 @@
 - **HUD**：`HudHunterInfo::sub_180566EC0` 每帧读取状态机：
   `showUVBlock = (timer > 0 || state ∈ {9,10,11}) && flag(A8) != 0`，
   随后调用 `0x180567370` 播放 `ShowUVBlock` / `HideUVBlock`。
+- **猎手能量条**：`HudHunterInfo` 构造函数 `0x180566880` 查找 `I_EnergyBar`（对象 `+0x78`）；
+  更新函数 `0x180566EC0` 通过 `IUIElementView::SetColor` 和 `IUIElement::SetScale`
+  更新颜色与横向比例。运行时复用该原生元素克隆背景和填充，放到原能量条下方。
 - **后处理**：`0x180CECFB0` 从 `playerObj + 0xC18` 指向的对象读取 `+0xA4`，映射为
   `0.75–25` 与 `1.5–40` 的强度（对应 `btz_uv_resistance` 的屏幕染色与拖影）。该对象同时
   具备 `+0x10` 字节与 `+0xA4` 浮点，字段布局与状态机一致，判定为同一状态机的另一引用路径。
@@ -135,6 +138,7 @@
 - `setHunterUvShield(mode, value)`
 - `setHunterUvShieldCharges(charges)` — `-1` 关闭覆盖；`0..99` 每帧把 `+0x70` 固定为该值
 - `setHunterUvShieldDuration(seconds)` — `<= 0` 关闭覆盖；否则激活时直接用该秒数替换配置值
+- `setHunterUvShieldProgress(ratio)` — `-1` 隐藏自定义条；`0..1` 更新原生 HUD 条的白色填充
 
 `DlModHunterUvShieldV1` 字段：`zombieState`、`smokeCharges`、`shieldSeconds`、`shieldDuration`、
 `shieldFlag`、`stateMachine`、`readTimeSeconds`，由 `validFields`

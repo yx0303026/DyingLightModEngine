@@ -2,6 +2,7 @@
 
 #include "logging/EngineLogger.h"
 #include "runtime/EngineEntityBindings.h"
+#include "tracking/EngineHunterHudBindings.h"
 
 #include <Windows.h>
 #include <MinHook.h>
@@ -23,11 +24,13 @@ extern "C"
 	void *g_engine_entity_hunter_uv_shield_ground_pound_blocked_continuation = nullptr;
 	void *g_engine_entity_hunter_uv_shield_hud_container_trampoline = nullptr;
 	void *g_engine_entity_hunter_uv_shield_hud_ability_trampoline = nullptr;
+	void *g_engine_entity_hunter_hud_info_update_trampoline = nullptr;
 	void EngineEntityHunterUvShieldTimerStub();
 	void EngineEntityHunterUvShieldDrainStub();
 	void EngineEntityHunterUvShieldClientStub();
 	void EngineEntityHunterUvShieldSmokeStub();
 	void EngineEntityHunterUvShieldGroundPoundStub();
+	void EngineEntityHunterHudInfoUpdate(void *) noexcept;
 }
 
 namespace
@@ -67,6 +70,14 @@ namespace
 		double observedTimeSeconds = 0.0;
 	};
 
+	struct NativeEnergyBarState
+	{
+		void *hudInfo = nullptr;
+		void *source = nullptr;
+		void *background = nullptr;
+		void *fill = nullptr;
+	};
+
 	SRWLOCK g_stateLock = SRWLOCK_INIT;
 	ShieldState g_state{};
 	std::atomic<std::uint32_t> g_mode{DLMOD_HUNTER_UV_SHIELD_MODE_GAME};
@@ -79,12 +90,141 @@ namespace
 	std::atomic<void *> g_customTakeoverStateMachine{nullptr};
 	std::atomic_bool g_hudContainerLogged = false;
 	std::atomic_uint32_t g_hudAbilityLogCount{0};
+	NativeEnergyBarState g_nativeEnergyBar{};
 	std::atomic_bool g_installed = false;
 	SRWLOCK g_hookStateLock = SRWLOCK_INIT;
 	DlModHunterUvShieldHookDescV1 g_hookState{};
 	std::mutex g_installMutex;
 	LARGE_INTEGER g_counterFrequency{};
 	INIT_ONCE g_counterFrequencyOnce = INIT_ONCE_STATIC_INIT;
+
+	template <typename Value>
+	bool ReadField(const void *object, std::uintptr_t offset, Value &value) noexcept;
+
+	void DestroyNativeEnergyBar() noexcept
+	{
+		const EngineHunterHudBindings *bindings =
+			EngineHunterHudBindings::Resolve();
+		if (bindings != nullptr)
+		{
+			bindings->DestroyRecursive(g_nativeEnergyBar.fill);
+			bindings->DestroyRecursive(g_nativeEnergyBar.background);
+		}
+		g_nativeEnergyBar = {};
+	}
+
+	bool EnsureNativeEnergyBar(void *hudInfo) noexcept
+	{
+		if (hudInfo == nullptr)
+			return false;
+		const EngineHunterHudBindings *bindings =
+			EngineHunterHudBindings::Resolve();
+		if (bindings == nullptr)
+			return false;
+
+		void *energyBar = nullptr;
+		if (!ReadField(
+				hudInfo,
+				EngineHunterHudBindings::HudInfoEnergyBarOffset,
+				energyBar) ||
+			energyBar == nullptr)
+		{
+			return false;
+		}
+		if (g_nativeEnergyBar.hudInfo == hudInfo &&
+			g_nativeEnergyBar.source != energyBar)
+		{
+			bindings->SetVisible(g_nativeEnergyBar.fill, false);
+			bindings->SetVisible(g_nativeEnergyBar.background, false);
+			DestroyNativeEnergyBar();
+		}
+		if (g_nativeEnergyBar.hudInfo != hudInfo ||
+			g_nativeEnergyBar.source != energyBar)
+		{
+			g_nativeEnergyBar = {};
+			g_nativeEnergyBar.hudInfo = hudInfo;
+			g_nativeEnergyBar.source = energyBar;
+		}
+
+		void *parent = bindings->GetParent(energyBar);
+		if (parent == nullptr)
+			return false;
+		if (g_nativeEnergyBar.background == nullptr)
+			g_nativeEnergyBar.background =
+				bindings->CloneElement(energyBar, parent);
+		if (g_nativeEnergyBar.fill == nullptr)
+			g_nativeEnergyBar.fill =
+				bindings->CloneElement(energyBar, parent);
+		if (g_nativeEnergyBar.background == nullptr ||
+			g_nativeEnergyBar.fill == nullptr)
+		{
+			bindings->SetVisible(g_nativeEnergyBar.background, false);
+			bindings->SetVisible(g_nativeEnergyBar.fill, false);
+			return false;
+		}
+		return true;
+	}
+
+	void UpdateNativeEnergyBar(void *hudInfo) noexcept
+	{
+		const float ratio = g_hudProgressRatio.load(std::memory_order_acquire);
+		if (!std::isfinite(ratio) || ratio < 0.0F || ratio > 1.0F)
+		{
+			if (g_nativeEnergyBar.hudInfo == hudInfo)
+			{
+				const EngineHunterHudBindings *bindings =
+					EngineHunterHudBindings::Resolve();
+				if (bindings != nullptr)
+				{
+					bindings->SetVisible(g_nativeEnergyBar.background, false);
+					bindings->SetVisible(g_nativeEnergyBar.fill, false);
+				}
+			}
+			return;
+		}
+		if (!EnsureNativeEnergyBar(hudInfo))
+			return;
+
+		const EngineHunterHudBindings *bindings =
+			EngineHunterHudBindings::Resolve();
+		if (bindings == nullptr)
+			return;
+		void *energyBar = nullptr;
+		if (!ReadField(
+				hudInfo,
+				EngineHunterHudBindings::HudInfoEnergyBarOffset,
+				energyBar) ||
+			energyBar == nullptr)
+		{
+			return;
+		}
+
+		EngineHunterHudBindings::Vector3 position{};
+		EngineHunterHudBindings::Vector3 size{};
+		if (!bindings->GetPosition(energyBar, position) ||
+			!bindings->GetUnscaledSize(energyBar, size))
+		{
+			return;
+		}
+		const float gap = (std::max)(2.0F, size.y * 0.25F);
+		position.y += size.y + gap;
+		bindings->SetPosition(g_nativeEnergyBar.background, position);
+		bindings->SetPosition(g_nativeEnergyBar.fill, position);
+		bindings->SetScale(
+			g_nativeEnergyBar.background,
+			{1.0F, 1.0F, 1.0F});
+		bindings->SetScale(
+			g_nativeEnergyBar.fill,
+			{ratio, 1.0F, 1.0F});
+		bindings->SetColor(
+			g_nativeEnergyBar.background,
+			{0.0F, 0.0F, 0.0F});
+		bindings->SetColor(
+			g_nativeEnergyBar.fill,
+			{1.0F, 1.0F, 1.0F});
+		bindings->SetVisible(g_nativeEnergyBar.background, true);
+		bindings->SetVisible(g_nativeEnergyBar.fill, ratio > 0.0F);
+	}
 
 	const DlModHunterUvShieldHookDescV1 ReadHookState() noexcept
 	{
@@ -395,6 +535,7 @@ namespace
 
 	using HudContainerFunction = char(__fastcall *)(void *);
 	using HudAbilityFunction = void(__fastcall *)(void *, void *);
+	using HudInfoUpdateFunction = void(__fastcall *)(void *);
 	using UiSetVisibleFunction = void(__fastcall *)(void *, bool);
 
 	UiSetVisibleFunction ResolveUiSetVisible() noexcept
@@ -664,7 +805,6 @@ extern "C" void __fastcall EngineEntity_OnHunterUvShieldHudAbility(
 		g_hudShieldAbility.store(ability, std::memory_order_release);
 		isShieldAbility = true;
 	}
-	const bool useOverride = isShieldAbility && hasRatio && data != nullptr;
 	const std::uint32_t logIndex = g_hudAbilityLogCount.fetch_add(
 		1, std::memory_order_relaxed);
 	if (logIndex < 8)
@@ -677,12 +817,6 @@ extern "C" void __fastcall EngineEntity_OnHunterUvShieldHudAbility(
 			static_cast<int>(displayedCharges),
 			static_cast<double>(ratio),
 			isShieldAbility ? 1U : 0U);
-	}
-	if (useOverride)
-	{
-		/* 保留进度覆盖数据，但始终清除图标可见标记。 */
-		const float clampedRatio = (std::min)((std::max)(ratio, 0.0F), 1.0F);
-		WriteField(data, 0x0C, clampedRatio);
 	}
 	if (isShieldAbility && data != nullptr)
 	{
@@ -702,6 +836,17 @@ extern "C" void __fastcall EngineEntity_OnHunterUvShieldHudAbility(
 		SetHunterUvShieldHudNumberVisible(ability, false);
 		SetHunterUvShieldHudFillVisible(ability, false);
 	}
+}
+
+extern "C" void __fastcall EngineEntityHunterHudInfoUpdate(
+	void *hudInfo) noexcept
+{
+	const auto original = reinterpret_cast<HudInfoUpdateFunction>(
+		g_engine_entity_hunter_hud_info_update_trampoline);
+	if (original == nullptr)
+		return;
+	original(hudInfo);
+	UpdateNativeEnergyBar(hudInfo);
 }
 
 bool EngineHunterUvShieldRuntime::Install() noexcept
@@ -730,6 +875,11 @@ bool EngineHunterUvShieldRuntime::Install() noexcept
 						 EngineEntityBindings::HunterUvShieldHudContainerSiteRva;
 	void *hudAbilitySite = reinterpret_cast<std::uint8_t *>(game) +
 						 EngineEntityBindings::HunterUvShieldHudAbilitySiteRva;
+	const EngineHunterHudBindings *hudBindings =
+		EngineHunterHudBindings::Resolve();
+	void *hudInfoSite = hudBindings == nullptr
+							? nullptr
+							: hudBindings->HudInfoUpdateSite();
 	if (std::memcmp(
 			updateSite, kTimerSignature, sizeof(kTimerSignature)) != 0 ||
 		std::memcmp(
@@ -845,6 +995,30 @@ bool EngineHunterUvShieldRuntime::Install() noexcept
 		EngineLogger::Warning(
 			"Hunter UV shield HUD ability sites did not match; native HUD remains active");
 	}
+	if (hudBindings != nullptr &&
+		hudBindings->HasExpectedHudInfoUpdateSignature())
+	{
+		void *hudInfoTrampoline = nullptr;
+		if (CreateHook(
+				hudInfoSite,
+				reinterpret_cast<void *>(&EngineEntityHunterHudInfoUpdate),
+				&hudInfoTrampoline,
+				"HudHunterInfo native energy bar"))
+		{
+			g_engine_entity_hunter_hud_info_update_trampoline =
+				hudInfoTrampoline;
+		}
+		else
+		{
+			EngineLogger::Warning(
+				"Hunter native energy bar hook failed; custom progress remains unavailable");
+		}
+	}
+	else
+	{
+		EngineLogger::Warning(
+			"HudHunterInfo update site did not match; custom progress remains unavailable");
+	}
 
 	/* 能量扣减入口是可选钩子：签名不符或挂接失败只会失去真实免疫，HUD 计时仍然工作。 */
 	void* drainSite = reinterpret_cast<std::uint8_t*>(game) +
@@ -892,6 +1066,9 @@ bool EngineHunterUvShieldRuntime::Install() noexcept
 	if (enableStatus == MH_OK &&
 		g_engine_entity_hunter_uv_shield_hud_ability_trampoline != nullptr)
 		enableStatus = MH_EnableHook(hudAbilitySite);
+	if (enableStatus == MH_OK &&
+		g_engine_entity_hunter_hud_info_update_trampoline != nullptr)
+		enableStatus = MH_EnableHook(hudInfoSite);
 	if (enableStatus != MH_OK)
 	{
 		RemoveHooks(updateSite, clientSite, smokeSite, groundPoundSite);
@@ -899,6 +1076,11 @@ bool EngineHunterUvShieldRuntime::Install() noexcept
 		MH_RemoveHook(hudContainerSite);
 		MH_DisableHook(hudAbilitySite);
 		MH_RemoveHook(hudAbilitySite);
+		if (g_engine_entity_hunter_hud_info_update_trampoline != nullptr)
+		{
+			MH_DisableHook(hudInfoSite);
+			MH_RemoveHook(hudInfoSite);
+		}
 		if (g_engine_entity_hunter_uv_shield_drain_trampoline != nullptr)
 		{
 			MH_DisableHook(drainSite);
@@ -913,6 +1095,7 @@ bool EngineHunterUvShieldRuntime::Install() noexcept
 		g_engine_entity_hunter_uv_shield_ground_pound_blocked_continuation = nullptr;
 		g_engine_entity_hunter_uv_shield_hud_container_trampoline = nullptr;
 		g_engine_entity_hunter_uv_shield_hud_ability_trampoline = nullptr;
+		g_engine_entity_hunter_hud_info_update_trampoline = nullptr;
 		return false;
 	}
 	g_installed.store(true, std::memory_order_release);
@@ -948,6 +1131,19 @@ void EngineHunterUvShieldRuntime::Shutdown() noexcept
 				MH_DisableHook(hudAbilitySite);
 				MH_RemoveHook(hudAbilitySite);
 			}
+			if (g_engine_entity_hunter_hud_info_update_trampoline != nullptr)
+			{
+				const EngineHunterHudBindings *bindings =
+					EngineHunterHudBindings::Resolve();
+				void *hudInfoSite = bindings != nullptr
+										? bindings->HudInfoUpdateSite()
+										: nullptr;
+				if (hudInfoSite != nullptr)
+				{
+					MH_DisableHook(hudInfoSite);
+					MH_RemoveHook(hudInfoSite);
+				}
+			}
 			if (g_engine_entity_hunter_uv_shield_drain_trampoline != nullptr)
 			{
 				void* drainSite = reinterpret_cast<std::uint8_t*>(game) +
@@ -976,6 +1172,7 @@ void EngineHunterUvShieldRuntime::Shutdown() noexcept
 	g_engine_entity_hunter_uv_shield_ground_pound_blocked_continuation = nullptr;
 	g_engine_entity_hunter_uv_shield_hud_container_trampoline = nullptr;
 	g_engine_entity_hunter_uv_shield_hud_ability_trampoline = nullptr;
+	g_engine_entity_hunter_hud_info_update_trampoline = nullptr;
 	g_chargeOverride.store(kDisableChargeOverride, std::memory_order_release);
 	g_durationOverride.store(0.0F, std::memory_order_release);
 	g_hudProgressRatio.store(-1.0F, std::memory_order_release);
@@ -1086,7 +1283,7 @@ DlModResult EngineHunterUvShieldRuntime::SetProgressRatio(float ratio) noexcept
 	if (!std::isfinite(ratio) || ratio < -1.0F || ratio > 1.0F)
 		return DLMOD_RESULT_INVALID_ARGUMENT;
 	if (!g_installed.load(std::memory_order_acquire) ||
-		g_engine_entity_hunter_uv_shield_hud_ability_trampoline == nullptr)
+		g_engine_entity_hunter_hud_info_update_trampoline == nullptr)
 	{
 		return DLMOD_RESULT_UNSUPPORTED_FEATURE;
 	}
