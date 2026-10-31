@@ -162,3 +162,63 @@ api->readHunterUvShield(&shield);               // shield.smokeCharges / shieldS
 | `DLMOD_HUNTER_UV_SHIELD_MODE_SCALE` | 3 | 递减与激活时长按 `value` 倍率缩放（0–100） |
 
 `installHunterTracking()` 会在运动追踪安装成功后顺带安装护盾钩子（失败不影响运动追踪）。
+
+## 生命周期钩子
+
+当前版本在上述四个写入点之上提供了稳定的生命周期回调：
+
+| 阶段 | 原版位置 | 说明 |
+| --- | --- | --- |
+| 开始：防御烟雾 | `RVA 0xDD87A2` | 读取 `params[734]` 后提交 `+0xA4`，并设置 `+0xA8` |
+| 开始：捶地 | `RVA 0xDDD5F9` | 读取 `params[735]` 后提交 `+0xA4`，并清除 `+0xA8` |
+| 持续：主端更新 | `RVA 0xDD98BD` | 每帧把 `max(timer - dt, 0)` 写回 `+0xA4` |
+| 持续：客户端更新 | `RVA 0xDD9977` | 客户端路径把 `max(timer - dt, 0)` 写回 `+0xA4` |
+
+模组可以通过 `DlModEntityApiV1::registerHunterUvShieldHooks` 注册生命周期回调。
+开始回调返回 `0` 时，运行时会跳过对应的计时器写入和紧邻的 HUD 标记，
+从而阻止本次紫外线护盾开始事件；返回非零则继续执行原版链路。持续回调
+会收到写入前剩余时间和本次写入后的剩余时间；当剩余时间从正数变为零或
+负数时触发结束回调。
+
+```cpp
+uint8_t MODSDK_CALL OnUvShieldStart(
+    void* stateMachine,
+    uint32_t source,
+    float durationSeconds,
+    void* userData)
+{
+    // 返回 0 阻止本次开始，返回 1 放行原版逻辑。
+    return 1;
+}
+
+void MODSDK_CALL OnUvShieldUpdate(
+    void* stateMachine,
+    uint32_t source,
+    float previousSeconds,
+    float remainingSeconds,
+    void* userData)
+{
+}
+
+void MODSDK_CALL OnUvShieldEnd(
+    void* stateMachine,
+    uint32_t source,
+    void* userData)
+{
+}
+
+DlModHunterUvShieldHookDescV1 hooks{};
+hooks.structSize = sizeof(hooks);
+hooks.abiVersion = MODSDK_ABI_VERSION;
+hooks.onStart = &OnUvShieldStart;
+hooks.onUpdate = &OnUvShieldUpdate;
+hooks.onEnd = &OnUvShieldEnd;
+hooks.userData = nullptr;
+hostApi->entity->registerHunterUvShieldHooks(&hooks);
+```
+
+`source` 可取 `DLMOD_HUNTER_UV_HOOK_SOURCE_SMOKE`、
+`DLMOD_HUNTER_UV_HOOK_SOURCE_GROUND_POUND`、
+`DLMOD_HUNTER_UV_HOOK_SOURCE_UPDATE` 和
+`DLMOD_HUNTER_UV_HOOK_SOURCE_CLIENT_UPDATE`。模组卸载前应调用
+`unregisterHunterUvShieldHooks()`，避免回调继续指向已卸载的 DLL。

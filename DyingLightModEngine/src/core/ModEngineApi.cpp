@@ -1,6 +1,7 @@
 #include "sdk/EngineApiAbi.h"
 #include "runtime/EngineHookRuntime.h"
 #include "runtime/EngineHotkeyRuntime.h"
+#include "tracking/EngineHunterUvShieldRuntime.h"
 #include "logging/EngineLogger.h"
 
 #include <Windows.h>
@@ -203,6 +204,7 @@ namespace {
 						EngineHookRuntime::RemoveAll();
 					}
 					EngineHotkeyRuntime::RemoveForOwner(id);
+					EngineHunterUvShieldRuntime::UnregisterHooks();
 					EngineLogger::DestroyModContext(failed->logContext);
 					logContext = nullptr;
 					runtime.mods.erase(failed);
@@ -242,6 +244,7 @@ namespace {
 					return DLMOD_RESULT_INVALID_STATE;
 				}
 				EngineHotkeyRuntime::RemoveForOwner(existing->id);
+				EngineHunterUvShieldRuntime::UnregisterHooks();
 				removed = *existing;
 				runtime.mods.erase(existing);
 			}

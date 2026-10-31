@@ -59,6 +59,43 @@ extern "C"
 #define DLMOD_HUNTER_UV_SHIELD_MODE_OFF 2u
 #define DLMOD_HUNTER_UV_SHIELD_MODE_SCALE 3u
 
+	/* 紫外线护盾生命周期来源：烟雾、捶地、主端更新、客户端更新。 */
+#define DLMOD_HUNTER_UV_HOOK_SOURCE_SMOKE 1u
+#define DLMOD_HUNTER_UV_HOOK_SOURCE_GROUND_POUND 2u
+#define DLMOD_HUNTER_UV_HOOK_SOURCE_UPDATE 3u
+#define DLMOD_HUNTER_UV_HOOK_SOURCE_CLIENT_UPDATE 4u
+
+	/* 开始钩子返回非零继续执行，返回零则跳过本次护盾提交。 */
+	typedef uint8_t(MODSDK_CALL *ModEngineHunterUvShieldStartHookFn)(
+		void *stateMachine,
+		uint32_t source,
+		float durationSeconds,
+		void *userData);
+	typedef void(MODSDK_CALL *ModEngineHunterUvShieldUpdateHookFn)(
+		void *stateMachine,
+		uint32_t source,
+		float previousSeconds,
+		float remainingSeconds,
+		void *userData);
+	typedef void(MODSDK_CALL *ModEngineHunterUvShieldEndHookFn)(
+		void *stateMachine,
+		uint32_t source,
+		void *userData);
+
+	typedef struct DlModHunterUvShieldHookDescV1
+	{
+		uint32_t structSize;
+		uint32_t abiVersion;
+		void *userData;
+		ModEngineHunterUvShieldStartHookFn onStart;
+		ModEngineHunterUvShieldUpdateHookFn onUpdate;
+		ModEngineHunterUvShieldEndHookFn onEnd;
+	} DlModHunterUvShieldHookDescV1;
+
+	typedef DlModResult(MODSDK_CALL *ModEngineRegisterHunterUvShieldHooksFn)(
+		const DlModHunterUvShieldHookDescV1 *desc);
+	typedef DlModResult(MODSDK_CALL *ModEngineUnregisterHunterUvShieldHooksFn)(void);
+
 	/* 紫外线护盾快照：shieldSeconds 为状态机上的光免疫剩余秒数，shieldFlag 为 HUD 紫外格挡标记，
 	   smokeCharges 为防御烟雾剩余充能（状态机 +0x70），shieldDuration 为最近一次激活的时长。 */
 	typedef struct DlModHunterUvShieldV1
@@ -230,9 +267,9 @@ typedef struct DlModHunterSnapshotV1
 #define DLMOD_AIM_BONE_HEAD 1u
 	/* 允许拾取的实体种类位掩码，位序与 DlModEntityKindV1 一致。 */
 #define DLMOD_AIM_KIND_MASK(kind) (1u << (kind))
-#define DLMOD_AIM_KIND_DEFAULT \
+#define DLMOD_AIM_KIND_DEFAULT                       \
 	(DLMOD_AIM_KIND_MASK(DLMOD_ENTITY_KIND_PLAYER) | \
-	 DLMOD_AIM_KIND_MASK(DLMOD_ENTITY_KIND_HUMAN) | \
+	 DLMOD_AIM_KIND_MASK(DLMOD_ENTITY_KIND_HUMAN) |  \
 	 DLMOD_AIM_KIND_MASK(DLMOD_ENTITY_KIND_HUNTER) | \
 	 DLMOD_AIM_KIND_MASK(DLMOD_ENTITY_KIND_ZOMBIE))
 
@@ -393,6 +430,8 @@ typedef struct DlModHunterSnapshotV1
 		ModEngineSetHunterUvShieldChargesFn setHunterUvShieldCharges;
 		ModEngineSetHunterUvShieldDurationFn setHunterUvShieldDuration;
 		ModEngineSetHunterUvShieldProgressFn setHunterUvShieldProgress;
+		ModEngineRegisterHunterUvShieldHooksFn registerHunterUvShieldHooks;
+		ModEngineUnregisterHunterUvShieldHooksFn unregisterHunterUvShieldHooks;
 		ModEngineInstallDamageTrackingFn installDamageTracking;
 		ModEngineIsDamageTrackingInstalledFn isDamageTrackingInstalled;
 		ModEngineRegisterDamageHookFn registerDamageHook;
@@ -413,6 +452,8 @@ typedef struct DlModHunterSnapshotV1
 	((uint32_t)(offsetof(DlModEntityApiV1, readBoneByName) + sizeof(ModEngineReadBoneByNameFn)))
 #define DLMOD_ENTITY_API_V1_UV_SHIELD_SIZE \
 	((uint32_t)(offsetof(DlModEntityApiV1, setHunterUvShieldProgress) + sizeof(ModEngineSetHunterUvShieldProgressFn)))
+#define DLMOD_ENTITY_API_V1_UV_HOOK_SIZE \
+	((uint32_t)(offsetof(DlModEntityApiV1, unregisterHunterUvShieldHooks) + sizeof(ModEngineUnregisterHunterUvShieldHooksFn)))
 #define DLMOD_ENTITY_API_V1_DAMAGE_SIZE \
 	((uint32_t)(offsetof(DlModEntityApiV1, unregisterDamageHook) + sizeof(ModEngineUnregisterDamageHookFn)))
 #define DLMOD_ENTITY_API_V1_AIM_SIZE \

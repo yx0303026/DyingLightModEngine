@@ -10,6 +10,8 @@ EXTERN g_engine_entity_hunter_uv_shield_drain_trampoline:QWORD
 EXTERN g_engine_entity_hunter_uv_shield_client_trampoline:QWORD
 EXTERN g_engine_entity_hunter_uv_shield_smoke_trampoline:QWORD
 EXTERN g_engine_entity_hunter_uv_shield_ground_pound_trampoline:QWORD
+EXTERN g_engine_entity_hunter_uv_shield_smoke_blocked_continuation:QWORD
+EXTERN g_engine_entity_hunter_uv_shield_ground_pound_blocked_continuation:QWORD
 
 PUBLIC EngineEntityHunterUvShieldTimerStub
 PUBLIC EngineEntityHunterUvShieldDrainStub
@@ -130,6 +132,9 @@ EngineEntityHunterUvShieldSmokeStub PROC
 	mov rcx, qword ptr [rbx+30h]
 	movd edx, xmm0
 	call EngineEntity_OnHunterUvShieldDefensiveSmoke
+	movd eax, xmm0
+	test eax, 80000000h
+	jnz EngineEntityHunterUvShieldSmokeBlocked
 
 	movdqu xmm1, xmmword ptr [rsp+20h]
 	movdqu xmm2, xmmword ptr [rsp+30h]
@@ -148,6 +153,24 @@ EngineEntityHunterUvShieldSmokeStub PROC
 	pop rax
 	popfq
 	jmp qword ptr [g_engine_entity_hunter_uv_shield_smoke_trampoline]
+EngineEntityHunterUvShieldSmokeBlocked:
+	movdqu xmm1, xmmword ptr [rsp+20h]
+	movdqu xmm2, xmmword ptr [rsp+30h]
+	movdqu xmm3, xmmword ptr [rsp+40h]
+	movdqu xmm4, xmmword ptr [rsp+50h]
+	movdqu xmm5, xmmword ptr [rsp+60h]
+	mov rsp, rbx
+
+	pop rbx
+	pop r11
+	pop r10
+	pop r9
+	pop r8
+	pop rdx
+	pop rcx
+	pop rax
+	popfq
+	jmp qword ptr [g_engine_entity_hunter_uv_shield_smoke_blocked_continuation]
 EngineEntityHunterUvShieldSmokeStub ENDP
 
 EngineEntityHunterUvShieldGroundPoundStub PROC
@@ -173,6 +196,9 @@ EngineEntityHunterUvShieldGroundPoundStub PROC
 	mov rcx, qword ptr [rbx+30h]
 	movd edx, xmm0
 	call EngineEntity_OnHunterUvShieldGroundPound
+	movd eax, xmm0
+	test eax, 80000000h
+	jnz EngineEntityHunterUvShieldGroundPoundBlocked
 
 	movdqu xmm1, xmmword ptr [rsp+20h]
 	movdqu xmm2, xmmword ptr [rsp+30h]
@@ -191,6 +217,24 @@ EngineEntityHunterUvShieldGroundPoundStub PROC
 	pop rax
 	popfq
 	jmp qword ptr [g_engine_entity_hunter_uv_shield_ground_pound_trampoline]
+EngineEntityHunterUvShieldGroundPoundBlocked:
+	movdqu xmm1, xmmword ptr [rsp+20h]
+	movdqu xmm2, xmmword ptr [rsp+30h]
+	movdqu xmm3, xmmword ptr [rsp+40h]
+	movdqu xmm4, xmmword ptr [rsp+50h]
+	movdqu xmm5, xmmword ptr [rsp+60h]
+	mov rsp, rbx
+
+	pop rbx
+	pop r11
+	pop r10
+	pop r9
+	pop r8
+	pop rdx
+	pop rcx
+	pop rax
+	popfq
+	jmp qword ptr [g_engine_entity_hunter_uv_shield_ground_pound_blocked_continuation]
 EngineEntityHunterUvShieldGroundPoundStub ENDP
 
 ; 函数入口桩：rcx = UV 组件，xmm1 = 增减量；回调返回的新增量改投 xmm1 后交给跳板重放序言。

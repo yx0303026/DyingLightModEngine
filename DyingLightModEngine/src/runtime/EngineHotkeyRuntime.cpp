@@ -71,7 +71,6 @@ namespace {
 
 	constexpr std::uint32_t kInvalidAction = DLMOD_HOTKEY_INVALID_ACTION;
 	constexpr std::uint32_t kInvalidKey = DLMOD_HOTKEY_INVALID_KEY;
-	constexpr std::uint32_t kFallbackActionBase = 0x80000000u;
 
 	struct TtlString {
 		char* data;
@@ -147,30 +146,10 @@ namespace {
 	bool g_hookCreateFailed = false;
 	bool g_injected = false;
 	bool g_needsReload = false;
-	bool g_fallbackLogged = false;
 	std::uint64_t g_lastReloadMs = 0;
 	std::uint64_t g_lastBindingRefreshMs = 0;
 	std::uint64_t g_lastInjectionWarningMs = 0;
 	std::uint32_t g_injectedGeneration = 0;
-	std::uint32_t g_nextFallbackActionId = kFallbackActionBase;
-
-	void AssignFallbackBinding(Hotkey& hotkey) noexcept
-	{
-		if (hotkey.actionId == kInvalidAction) {
-			if (g_nextFallbackActionId == kInvalidAction) {
-				g_nextFallbackActionId = kFallbackActionBase;
-			}
-			hotkey.actionId = g_nextFallbackActionId++;
-		}
-		hotkey.boundKey = hotkey.defaultKey;
-	}
-
-	void PrepareFallbackBindingsLocked() noexcept
-	{
-		for (Hotkey& hotkey : g_hotkeys) {
-			AssignFallbackBinding(hotkey);
-		}
-	}
 
 	GameHeap ResolveGameHeap() noexcept
 	{
@@ -302,6 +281,50 @@ namespace {
 		}
 
 		items[count] = value;
+		*reinterpret_cast<int*>(base + countOffset) = count + 1;
+		return true;
+	}
+
+	bool AppendInlineVector(
+		std::uint8_t* base,
+		std::uint32_t pointerOffset,
+		std::uint32_t countOffset,
+		std::uint32_t capacityOffset,
+		std::size_t elementSize,
+		const void* value) noexcept
+	{
+		if (base == nullptr || value == nullptr || elementSize == 0) {
+			return false;
+		}
+
+		auto* items = *reinterpret_cast<std::uint8_t**>(base + pointerOffset);
+		const int count = *reinterpret_cast<int*>(base + countOffset);
+		int capacity = *reinterpret_cast<int*>(base + capacityOffset);
+		if (count < 0 || capacity < 0 || count > capacity) {
+			return false;
+		}
+
+		if (count + 1 > capacity) {
+			int newCapacity = (((10 * capacity) >> 3) + 16) & 0x3FFFFFF0;
+			if (newCapacity < count + 1) {
+				newCapacity = count + 1;
+			}
+			void* grown = Heap().realloc(
+				items,
+				elementSize * static_cast<std::size_t>(newCapacity));
+			if (grown == nullptr) {
+				return false;
+			}
+			items = static_cast<std::uint8_t*>(grown);
+			capacity = newCapacity;
+			*reinterpret_cast<std::uint8_t**>(base + pointerOffset) = items;
+			*reinterpret_cast<int*>(base + capacityOffset) = capacity;
+		}
+
+		std::memcpy(
+			items + elementSize * static_cast<std::size_t>(count),
+			value,
+			elementSize);
 		*reinterpret_cast<int*>(base + countOffset) = count + 1;
 		return true;
 	}
@@ -515,22 +538,26 @@ namespace {
 
 	bool AppendViewRow(void* view, void* keybinding, const std::string& label) noexcept
 	{
-		auto* row = static_cast<std::uint8_t*>(AllocateGameMemory(kViewRowSize));
-		if (row == nullptr) {
+		/* 游戏的 View 行数组保存 0x18 字节记录本体，不是指针数组。 */
+		std::array<std::uint8_t, kViewRowSize> row{};
+		*reinterpret_cast<void**>(row.data()) = keybinding;
+		if (!AssignGameString(row.data() + 8, label.c_str())) {
 			return false;
 		}
-		*reinterpret_cast<void**>(row) = keybinding;
-		if (!AssignGameString(row + 8, label.c_str())) {
-			FreeGameMemory(row);
-			return false;
-		}
+
 		auto* viewBytes = static_cast<std::uint8_t*>(view);
-		return AppendPointerVector(
+		if (!AppendInlineVector(
 			viewBytes,
 			kViewRowOffset,
 			kViewRowCountOffset,
 			kViewRowCapacityOffset,
-			row);
+			kViewRowSize,
+			row.data())) {
+			FreeGameMemory(
+				reinterpret_cast<TtlString*>(row.data() + 8)->data);
+			return false;
+		}
+		return true;
 	}
 
 	bool RebuildConverterStateLocked(void* converter) noexcept
@@ -576,20 +603,134 @@ namespace {
 
 	bool InjectAllLocked(void* converter) noexcept
 	{
-		(void)converter;
-		PrepareFallbackBindingsLocked();
-		if (!g_fallbackLogged) {
-			g_fallbackLogged = true;
-			EngineLogger::Warning(
-				"Hotkey runtime: native game input injection is disabled; safe polling is active.");
+		if (converter == nullptr) {
+			return false;
 		}
+		if (g_hotkeys.empty()) {
+			g_injected = true;
+			return true;
+		}
+		if (!ResolveGameFunctionsLocked()) {
+			return false;
+		}
+		if (!AssignActionIdsLocked()) {
+			return false;
+		}
+
+		constexpr int kControllers[] = {0, 2};
+		void* presets[2]{};
+		void* controllerContexts[2]{};
+
+		for (int index = 0; index < 2; ++index) {
+			auto* context = static_cast<std::uint8_t*>(converter) +
+				static_cast<std::uint32_t>(kControllers[index]) * kControllerStride;
+			controllerContexts[index] = context;
+			void* layout = FindLayout(context, "common_keyboard");
+			if (layout == nullptr ||
+				*reinterpret_cast<void**>(layout) != ResolveRva<void*>(kInputsLayoutVtableRva)) {
+				WarnInjectionThrottled(
+					"Hotkey runtime: common_keyboard layout not found; registration deferred.");
+				return false;
+			}
+			void* preset = FindPreset(layout, "");
+			if (preset == nullptr) {
+				WarnInjectionThrottled(
+					"Hotkey runtime: default preset not found; registration deferred.");
+				return false;
+			}
+			presets[index] = preset;
+		}
+
+		const std::vector<PageGroup> pages = GroupPagesLocked();
+		for (int index = 0; index < 2; ++index) {
+			auto* context = static_cast<std::uint8_t*>(controllerContexts[index]);
+			auto* preset = static_cast<std::uint8_t*>(presets[index]);
+
+			for (const Hotkey& hotkey : g_hotkeys) {
+				void* operation = CreateOperation(hotkey.actionId, hotkey.defaultKey);
+				if (operation == nullptr ||
+					!AppendPointerVector(
+						preset,
+						kPresetOperationOffset,
+						kPresetOperationCountOffset,
+						kPresetOperationCapacityOffset,
+						operation)) {
+					EngineLogger::Error("Hotkey runtime: failed to append action binding.");
+					g_injected = true;
+					return false;
+				}
+			}
+
+			std::vector<std::pair<std::size_t, void*>> keybindings;
+			keybindings.reserve(g_hotkeys.size());
+			for (std::size_t i = 0; i < g_hotkeys.size(); ++i) {
+				const Hotkey& hotkey = g_hotkeys[i];
+				const std::string internalName =
+					"Keybinding_Mod_" + SanitizeIdentifier(hotkey.id);
+				void* keybinding = CreateKeybinding(hotkey.actionId, internalName);
+				if (keybinding == nullptr ||
+					!AppendPointerVector(
+						context,
+						kControllerEntryOffset,
+						kControllerEntryCountOffset,
+						kControllerEntryCapacityOffset,
+						keybinding)) {
+					EngineLogger::Error("Hotkey runtime: failed to append keybinding row.");
+					g_injected = true;
+					return false;
+				}
+				keybindings.emplace_back(i, keybinding);
+			}
+
+			for (const PageGroup& page : pages) {
+				void* view = CreateView(page.title);
+				if (view == nullptr) {
+					EngineLogger::Error("Hotkey runtime: failed to create key binding page.");
+					g_injected = true;
+					return false;
+				}
+				for (const std::size_t hotkeyIndex : page.hotkeyIndices) {
+					void* keybinding = nullptr;
+					for (const auto& entry : keybindings) {
+						if (entry.first == hotkeyIndex) {
+							keybinding = entry.second;
+							break;
+						}
+					}
+					if (keybinding == nullptr ||
+						!AppendViewRow(view, keybinding, g_hotkeys[hotkeyIndex].displayName)) {
+						EngineLogger::Error("Hotkey runtime: failed to append key binding row.");
+						g_injected = true;
+						return false;
+					}
+				}
+				if (!AppendInlineVector(
+						context,
+						kControllerViewOffset,
+						kControllerViewCountOffset,
+						kControllerViewCapacityOffset,
+						kViewSize,
+						view)) {
+					EngineLogger::Error("Hotkey runtime: failed to append key binding page.");
+					g_injected = true;
+					return false;
+				}
+				FreeGameMemory(view);
+			}
+		}
+
+		if (!RebuildConverterStateLocked(converter)) {
+			EngineLogger::Warning("Hotkey runtime: failed to rebuild converter state.");
+		}
+
 		++g_injectedGeneration;
 		g_injected = true;
 		g_needsReload = false;
 		EngineLogger::Logf(
 			EngineLogLevel::Info,
-			"Hotkey runtime: prepared %zu hotkey(s) for safe polling (generation %u).",
+			"Hotkey runtime: injected %zu hotkey(s) across %zu page(s) (generation %u).",
 			g_hotkeys.size(),
+			pages.size(),
 			g_injectedGeneration);
 		return true;
 	}
@@ -736,12 +877,17 @@ namespace {
 
 	void PollLocked(void* converter) noexcept
 	{
-		(void)converter;
 		if (!IsProcessForeground()) {
 			for (Hotkey& hotkey : g_hotkeys) {
 				hotkey.wasDown = false;
 			}
 			return;
+		}
+
+		const std::uint64_t now = GetTickCount64();
+		if (now - g_lastBindingRefreshMs >= kBindingRefreshMilliseconds) {
+			RefreshBindingsLocked(converter);
+			g_lastBindingRefreshMs = now;
 		}
 
 		for (std::size_t i = 0; i < g_hotkeys.size(); ++i) {
@@ -854,8 +1000,8 @@ void EngineHotkeyRuntime::Initialize() noexcept
 {
 	std::lock_guard<std::recursive_mutex> lock(g_mutex);
 	g_initialized = true;
-	g_injected = false;
-	g_needsReload = false;
+	g_lastBindingRefreshMs = 0;
+	TryInstallHookLocked();
 }
 
 void EngineHotkeyRuntime::Tick() noexcept
@@ -864,12 +1010,40 @@ void EngineHotkeyRuntime::Tick() noexcept
 	if (!g_initialized) {
 		return;
 	}
+	TryInstallHookLocked();
+
+	void* converter = GetConverterIfReadyLocked();
+	if (converter == nullptr) {
+		return;
+	}
+
 	if (!g_injected || g_needsReload) {
-		InjectAllLocked(nullptr);
+		if (g_needsReload && g_injected) {
+			const std::uint64_t now = GetTickCount64();
+			if (now - g_lastReloadMs >= kReloadDebounceMilliseconds) {
+				EngineLogger::Info(
+					"Hotkey runtime: reloading input bindings for late registration changes.");
+				if (g_originalReload != nullptr) {
+					g_originalReload(converter);
+				}
+				else {
+					const auto reload = ResolveRva<ReloadInputsFn>(kReloadInputsRva);
+					if (reload != nullptr) {
+						reload(converter);
+					}
+				}
+				g_lastReloadMs = now;
+				g_injected = false;
+				g_needsReload = false;
+			}
+		}
+		if (!g_injected) {
+			InjectAllLocked(converter);
+		}
 	}
 
 	if (g_injected) {
-		PollLocked(nullptr);
+		PollLocked(converter);
 	}
 }
 
@@ -888,7 +1062,7 @@ void EngineHotkeyRuntime::Shutdown() noexcept
 	g_needsReload = false;
 	g_initialized = false;
 	g_hotkeys.clear();
-	g_nextFallbackActionId = kFallbackActionBase;
+	g_lastBindingRefreshMs = 0;
 }
 
 const DlModHotkeyApiV1* EngineHotkeyRuntime::GetApi() noexcept
@@ -934,13 +1108,12 @@ DlModResult MODSDK_CALL EngineHotkeyRuntime::RegisterHotkey(
 				: "Mods";
 		hotkey.owner = g_loadingMod != nullptr ? *g_loadingMod : std::string();
 		hotkey.defaultKey = desc->defaultKey;
-		hotkey.boundKey = desc->defaultKey;
-		hotkey.actionId = g_nextFallbackActionId++;
 		hotkey.userData = desc->userData;
 		hotkey.callback = desc->callback;
 		g_hotkeys.push_back(std::move(hotkey));
-		g_injected = false;
-		g_needsReload = false;
+		if (g_injected) {
+			g_needsReload = true;
+		}
 		return DLMOD_RESULT_SUCCESS;
 	}
 	catch (...) {
@@ -999,8 +1172,9 @@ DlModResult MODSDK_CALL EngineHotkeyRuntime::UnregisterHotkey(const char* id) no
 			return DLMOD_RESULT_NOT_FOUND;
 		}
 		g_hotkeys.erase(iterator);
-		g_injected = false;
-		g_needsReload = false;
+		if (g_injected) {
+			g_needsReload = true;
+		}
 		return DLMOD_RESULT_SUCCESS;
 	}
 	catch (...) {
@@ -1019,9 +1193,8 @@ void EngineHotkeyRuntime::RemoveForOwner(const std::string& owner) noexcept
 				g_hotkeys.end(),
 				[&owner](const Hotkey& hotkey) { return hotkey.owner == owner; }),
 			g_hotkeys.end());
-		if (g_hotkeys.size() != previousSize) {
-			g_injected = false;
-			g_needsReload = false;
+		if (g_hotkeys.size() != previousSize && g_injected) {
+			g_needsReload = true;
 		}
 	}
 	catch (...) {

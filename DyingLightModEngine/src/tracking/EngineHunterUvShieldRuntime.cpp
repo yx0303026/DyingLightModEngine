@@ -19,6 +19,8 @@ extern "C"
 	void *g_engine_entity_hunter_uv_shield_client_trampoline = nullptr;
 	void *g_engine_entity_hunter_uv_shield_smoke_trampoline = nullptr;
 	void *g_engine_entity_hunter_uv_shield_ground_pound_trampoline = nullptr;
+	void *g_engine_entity_hunter_uv_shield_smoke_blocked_continuation = nullptr;
+	void *g_engine_entity_hunter_uv_shield_ground_pound_blocked_continuation = nullptr;
 	void *g_engine_entity_hunter_uv_shield_hud_container_trampoline = nullptr;
 	void *g_engine_entity_hunter_uv_shield_hud_ability_trampoline = nullptr;
 	void EngineEntityHunterUvShieldTimerStub();
@@ -77,9 +79,84 @@ namespace
 	std::atomic_bool g_hudContainerLogged = false;
 	std::atomic_uint32_t g_hudAbilityLogCount{0};
 	std::atomic_bool g_installed = false;
+	SRWLOCK g_hookStateLock = SRWLOCK_INIT;
+	DlModHunterUvShieldHookDescV1 g_hookState{};
 	std::mutex g_installMutex;
 	LARGE_INTEGER g_counterFrequency{};
 	INIT_ONCE g_counterFrequencyOnce = INIT_ONCE_STATIC_INIT;
+
+	const DlModHunterUvShieldHookDescV1 ReadHookState() noexcept
+	{
+		DlModHunterUvShieldHookDescV1 hooks{};
+		AcquireSRWLockShared(&g_hookStateLock);
+		hooks = g_hookState;
+		ReleaseSRWLockShared(&g_hookStateLock);
+		return hooks;
+	}
+
+	bool InvokeStartHook(
+		void *stateMachine,
+		std::uint32_t source,
+		float durationSeconds) noexcept
+	{
+		const DlModHunterUvShieldHookDescV1 hooks = ReadHookState();
+		if (hooks.onStart == nullptr)
+			return true;
+		try
+		{
+			return hooks.onStart(
+				stateMachine,
+				source,
+				durationSeconds,
+				hooks.userData) != 0;
+		}
+		catch (...)
+		{
+			EngineLogger::Warning("Hunter UV shield start hook threw an exception.");
+			return true;
+		}
+	}
+
+	void InvokeUpdateHook(
+		void *stateMachine,
+		std::uint32_t source,
+		float previousSeconds,
+		float remainingSeconds) noexcept
+	{
+		const DlModHunterUvShieldHookDescV1 hooks = ReadHookState();
+		if (hooks.onUpdate == nullptr)
+			return;
+		try
+		{
+			hooks.onUpdate(
+				stateMachine,
+				source,
+				previousSeconds,
+				remainingSeconds,
+				hooks.userData);
+		}
+		catch (...)
+		{
+			EngineLogger::Warning("Hunter UV shield update hook threw an exception.");
+		}
+	}
+
+	void InvokeEndHook(
+		void *stateMachine,
+		std::uint32_t source) noexcept
+	{
+		const DlModHunterUvShieldHookDescV1 hooks = ReadHookState();
+		if (hooks.onEnd == nullptr)
+			return;
+		try
+		{
+			hooks.onEnd(stateMachine, source, hooks.userData);
+		}
+		catch (...)
+		{
+			EngineLogger::Warning("Hunter UV shield end hook threw an exception.");
+		}
+	}
 
 	BOOL CALLBACK InitializeCounterFrequency(PINIT_ONCE, PVOID, PVOID *)
 	{
@@ -236,6 +313,23 @@ namespace
 				   : duration;
 	}
 
+	float ApplyTimerLifecycle(
+		void *stateMachine,
+		std::uint32_t source,
+		float value) noexcept
+	{
+		float previous = 0.0F;
+		ReadField(
+			stateMachine,
+			EngineEntityBindings::ZombieStateMachineShieldSecondsOffset,
+			previous);
+		const float result = ApplyTimerOverride(value);
+		InvokeUpdateHook(stateMachine, source, previous, result);
+		if (previous > 0.0F && result <= 0.0F)
+			InvokeEndHook(stateMachine, source);
+		return result;
+	}
+
 	float BitsToFloat(std::uint32_t bits) noexcept
 	{
 		float value = 0.0F;
@@ -361,7 +455,10 @@ extern "C" float EngineEntity_OnHunterUvShieldTimer(
 		return value;
 	RecordObservation(stateMachine, value, false);
 	PinCharges(stateMachine);
-	const float result = ApplyTimerOverride(value);
+	const float result = ApplyTimerLifecycle(
+		stateMachine,
+		DLMOD_HUNTER_UV_HOOK_SOURCE_UPDATE,
+		value);
 	if (result > 0.0F &&
 		g_mode.load(std::memory_order_relaxed) == DLMOD_HUNTER_UV_SHIELD_MODE_PIN)
 	{
@@ -381,15 +478,30 @@ extern "C" float EngineEntity_OnHunterUvShieldClientTimer(
 	PinCharges(stateMachine);
 	/* 倍率只作用于主更新路径，避免同一帧被两条路径各缩放一次。 */
 	const std::uint32_t mode = g_mode.load(std::memory_order_acquire);
+	float result = value;
 	if (mode == DLMOD_HUNTER_UV_SHIELD_MODE_OFF)
-		return 0.0F;
-	if (mode == DLMOD_HUNTER_UV_SHIELD_MODE_PIN)
+		result = 0.0F;
+	else if (mode == DLMOD_HUNTER_UV_SHIELD_MODE_PIN)
 	{
 		const float setting = g_overrideValue.load(std::memory_order_acquire);
 		if (std::isfinite(setting) && setting > value)
-			return setting;
+			result = setting;
 	}
-	return value;
+	float previous = 0.0F;
+	ReadField(
+		stateMachine,
+		EngineEntityBindings::ZombieStateMachineShieldSecondsOffset,
+		previous);
+	InvokeUpdateHook(
+		stateMachine,
+		DLMOD_HUNTER_UV_HOOK_SOURCE_CLIENT_UPDATE,
+		previous,
+		result);
+	if (previous > 0.0F && result <= 0.0F)
+		InvokeEndHook(
+			stateMachine,
+			DLMOD_HUNTER_UV_HOOK_SOURCE_CLIENT_UPDATE);
+	return result;
 }
 
 extern "C" float EngineEntity_OnHunterUvShieldDefensiveSmoke(
@@ -399,6 +511,11 @@ extern "C" float EngineEntity_OnHunterUvShieldDefensiveSmoke(
 	const float duration = BitsToFloat(durationBits);
 	if (stateMachine == nullptr || !std::isfinite(duration))
 		return duration;
+	if (!InvokeStartHook(
+			stateMachine,
+			DLMOD_HUNTER_UV_HOOK_SOURCE_SMOKE,
+			duration))
+		return -1.0F;
 	RecordObservation(stateMachine, duration, true);
 	return ApplyDurationOverride(duration);
 }
@@ -410,6 +527,11 @@ extern "C" float EngineEntity_OnHunterUvShieldGroundPound(
 	const float duration = BitsToFloat(durationBits);
 	if (stateMachine == nullptr || !std::isfinite(duration))
 		return duration;
+	if (!InvokeStartHook(
+			stateMachine,
+			DLMOD_HUNTER_UV_HOOK_SOURCE_GROUND_POUND,
+			duration))
+		return -1.0F;
 	RecordObservation(stateMachine, duration, true);
 	return ApplyDurationOverride(duration);
 }
@@ -538,6 +660,12 @@ bool EngineHunterUvShieldRuntime::Install() noexcept
 			"Hunter UV shield hook sites did not match the expected game build");
 		return false;
 	}
+	g_engine_entity_hunter_uv_shield_smoke_blocked_continuation =
+		reinterpret_cast<std::uint8_t *>(game) +
+		EngineEntityBindings::HunterUvShieldSmokeAfterFlagRva;
+	g_engine_entity_hunter_uv_shield_ground_pound_blocked_continuation =
+		reinterpret_cast<std::uint8_t *>(game) +
+		EngineEntityBindings::HunterUvShieldGroundPoundAfterFlagRva;
 	const MH_STATUS initStatus = MH_Initialize();
 	if (initStatus != MH_OK && initStatus != MH_ERROR_ALREADY_INITIALIZED)
 		return false;
@@ -696,6 +824,8 @@ bool EngineHunterUvShieldRuntime::Install() noexcept
 		g_engine_entity_hunter_uv_shield_client_trampoline = nullptr;
 		g_engine_entity_hunter_uv_shield_smoke_trampoline = nullptr;
 		g_engine_entity_hunter_uv_shield_ground_pound_trampoline = nullptr;
+		g_engine_entity_hunter_uv_shield_smoke_blocked_continuation = nullptr;
+		g_engine_entity_hunter_uv_shield_ground_pound_blocked_continuation = nullptr;
 		g_engine_entity_hunter_uv_shield_hud_container_trampoline = nullptr;
 		g_engine_entity_hunter_uv_shield_hud_ability_trampoline = nullptr;
 		return false;
@@ -757,6 +887,8 @@ void EngineHunterUvShieldRuntime::Shutdown() noexcept
 	g_engine_entity_hunter_uv_shield_client_trampoline = nullptr;
 	g_engine_entity_hunter_uv_shield_smoke_trampoline = nullptr;
 	g_engine_entity_hunter_uv_shield_ground_pound_trampoline = nullptr;
+	g_engine_entity_hunter_uv_shield_smoke_blocked_continuation = nullptr;
+	g_engine_entity_hunter_uv_shield_ground_pound_blocked_continuation = nullptr;
 	g_engine_entity_hunter_uv_shield_hud_container_trampoline = nullptr;
 	g_engine_entity_hunter_uv_shield_hud_ability_trampoline = nullptr;
 	g_chargeOverride.store(kDisableChargeOverride, std::memory_order_release);
@@ -766,6 +898,9 @@ void EngineHunterUvShieldRuntime::Shutdown() noexcept
 	g_hudContainer.store(nullptr, std::memory_order_release);
 	g_hudContainerLogged.store(false, std::memory_order_release);
 	g_hudAbilityLogCount.store(0, std::memory_order_release);
+	AcquireSRWLockExclusive(&g_hookStateLock);
+	g_hookState = {};
+	ReleaseSRWLockExclusive(&g_hookStateLock);
 	AcquireSRWLockExclusive(&g_stateLock);
 	g_state = {};
 	ReleaseSRWLockExclusive(&g_stateLock);
@@ -881,4 +1016,37 @@ DlModResult EngineHunterUvShieldRuntime::SetDurationOverride(float seconds) noex
 	return g_installed.load(std::memory_order_acquire)
 			   ? DLMOD_RESULT_SUCCESS
 			   : DLMOD_RESULT_INVALID_STATE;
+}
+
+DlModResult EngineHunterUvShieldRuntime::RegisterHooks(
+	const DlModHunterUvShieldHookDescV1 &desc) noexcept
+{
+	if (desc.structSize < sizeof(DlModHunterUvShieldHookDescV1) ||
+		desc.abiVersion != MODSDK_ABI_VERSION ||
+		(desc.onStart == nullptr && desc.onUpdate == nullptr && desc.onEnd == nullptr))
+	{
+		return DLMOD_RESULT_INVALID_ARGUMENT;
+	}
+	if (!g_installed.load(std::memory_order_acquire))
+		return DLMOD_RESULT_INVALID_STATE;
+
+	AcquireSRWLockExclusive(&g_hookStateLock);
+	if (g_hookState.onStart != nullptr ||
+		g_hookState.onUpdate != nullptr ||
+		g_hookState.onEnd != nullptr)
+	{
+		ReleaseSRWLockExclusive(&g_hookStateLock);
+		return DLMOD_RESULT_INVALID_STATE;
+	}
+	g_hookState = desc;
+	ReleaseSRWLockExclusive(&g_hookStateLock);
+	return DLMOD_RESULT_SUCCESS;
+}
+
+DlModResult EngineHunterUvShieldRuntime::UnregisterHooks() noexcept
+{
+	AcquireSRWLockExclusive(&g_hookStateLock);
+	g_hookState = {};
+	ReleaseSRWLockExclusive(&g_hookStateLock);
+	return DLMOD_RESULT_SUCCESS;
 }

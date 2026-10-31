@@ -214,7 +214,7 @@ namespace {
 				state.hotkey = hostApi->hotkey;
 				state.shieldHotkeyRegistered = true;
 				Log(EngineLogLevel::Info,
-					"UV shield hotkey registered (F7 default; safe polling mode).");
+					"UV shield hotkey registered in the native input settings (F7 default).");
 			}
 			else {
 				Log(EngineLogLevel::Warning, "UV shield hotkey registration failed.");

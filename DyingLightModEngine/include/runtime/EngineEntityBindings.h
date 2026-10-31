@@ -105,8 +105,12 @@ public:
 	static constexpr std::uintptr_t HunterUvShieldClientSiteRva = 0xDD9977;
 	/* 防御烟雾 sub_180DD8620：timer = params[734]，并把 +0xA8 置 1。 */
 	static constexpr std::uintptr_t HunterUvShieldSmokeSiteRva = 0xDD87A2;
+	/* 烟雾开始提交被拒绝时，跳过计时器写入和 HUD 标记后的继续地址。 */
+	static constexpr std::uintptr_t HunterUvShieldSmokeAfterFlagRva = 0xDD87B1;
 	/* 捶地 sub_180DDD4C0：timer = max(timer, params[735])，并把 +0xA8 置 0。 */
 	static constexpr std::uintptr_t HunterUvShieldGroundPoundSiteRva = 0xDDD5F9;
+	/* 捶地开始提交被拒绝时，跳过计时器写入和 HUD 标记后的继续地址。 */
+	static constexpr std::uintptr_t HunterUvShieldGroundPoundAfterFlagRva = 0xDDD608;
 	/* HudZombieAbilities 容器更新入口：容器 + 0x68 为能力项数量，+ 0x60 + 4 * sizeof(void*)
 	   处缓存 UVBlock（索引 4）能力项指针。游戏每帧最多刷新 5 个猎手能力项。 */
 	static constexpr std::uintptr_t HunterUvShieldHudContainerSiteRva = 0x5C66C0;

@@ -10,8 +10,8 @@ game-native hotkey API.
 On load the mod installs the engine's hunter UV shield hooks and turns the Night
 Hunter's UV immunity into a toggleable skill:
 
-- Press **F7** to toggle the shield. The engine uses safe default-key polling
-  and does not modify the game's native input containers.
+- Press **F7** to toggle the shield by default. The hotkey is also exposed in
+  the game's native key binding settings, where it can be rebound.
 - The charge number is hidden using the game's unlimited-charge sentinel.
 - The HUD progress ring tracks shield energy instead of the hunter's UV resistance.
 - A full energy bar keeps the shield up for **10 seconds**.
@@ -33,9 +33,9 @@ the campaign is unaffected.
 
 ## Native Hotkeys
 
-The example registers its toggle through `DlModHotkeyApiV1`. The engine keeps
-that registration in its own state and polls the declared default key, so the
-game native input containers remain untouched:
+The example registers its toggle through `DlModHotkeyApiV1`. The engine adds the
+hotkey to the game's native input settings page and keeps the game binding as
+the source of truth:
 
 ```cpp
 DlModHotkeyDescV1 hotkey{};
@@ -52,12 +52,14 @@ hotkey.callback = &OnShieldHotkey;
 hostApi->hotkey->registerHotkey(&hotkey);
 ```
 
-Call `registerHotkey` from `onLoad`. The callback fires on the key-down edge
-with an engine-owned fallback action ID. `getHotkeyKey` returns the registered
-`defaultKey`, `getHotkeyAction` returns that fallback action ID, and
-`unregisterHotkey` must be called from `onUnload` so the callback never points
-at an unloaded DLL. Native game settings rebinding is intentionally disabled
-until it can be implemented without modifying game-owned input containers.
+Call `registerHotkey` from `onLoad`. The engine creates an `Example Mod` page
+in the game's native key binding settings and adds one row named
+`Toggle UV Shield`. The user can rebind that row in the game; the runtime
+refreshes the binding after the game's input configuration reloads. The
+callback fires on the key-down edge with the action ID allocated from the
+game's free action slots. `getHotkeyKey` returns the current effective binding,
+and `unregisterHotkey` must be called from `onUnload` so the callback never
+points at an unloaded DLL.
 
 ## Build
 

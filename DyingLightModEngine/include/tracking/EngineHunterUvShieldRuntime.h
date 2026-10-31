@@ -14,4 +14,7 @@ public:
 	static DlModResult SetChargeOverride(int32_t charges) noexcept;
 	static DlModResult SetDurationOverride(float seconds) noexcept;
 	static DlModResult SetProgressRatio(float ratio) noexcept;
+	static DlModResult RegisterHooks(
+		const DlModHunterUvShieldHookDescV1 &desc) noexcept;
+	static DlModResult UnregisterHooks() noexcept;
 };
