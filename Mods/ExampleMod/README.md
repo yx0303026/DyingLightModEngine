@@ -3,63 +3,38 @@
 Example Mod is a small loadable mod for Dying Light Mod Engine. It demonstrates
 the Mod SDK descriptor, ABI version check, host logging callback, load and
 unload callbacks, per-frame rendering callbacks, the entity API, and the
-game-native hotkey API.
+native UV shield lifecycle API.
 
 ## UV Shield Skill (Be the Zombie)
 
-On load the mod installs the engine's hunter UV shield hooks and turns the Night
-Hunter's UV immunity into a toggleable skill:
+On load the mod installs the engine's hunter UV shield hooks and takes over the
+Night Hunter's UV immunity lifecycle:
 
-- Press **F7** to toggle the shield by default. The hotkey is also exposed in
-  the game's native key binding settings, where it can be rebound.
+- Defensive smoke and ground pound start events are intercepted automatically.
+- The mod blocks the original UV shield write and starts its own six-second
+  energy-based shield.
+- The original UV timer update path remains observable, but the mod rewrites
+  the timer with its own remaining time each frame.
+- No custom hotkey is registered.
 - The charge number is hidden using the game's unlimited-charge sentinel.
 - The HUD progress ring tracks shield energy instead of the hunter's UV resistance.
-- A full energy bar keeps the shield up for **10 seconds**.
-- While the shield is off the bar recharges from empty to full in **15 seconds**.
+- A full energy bar keeps the shield up for **6 seconds**.
+- While the shield is off the bar recharges from empty to full in **20 seconds**.
 - When energy reaches zero the shield switches off automatically and recharges.
 
 The mod drives the engine through `DlModEntityApiV1`:
 
 ```cpp
 entity->installUvShieldTracking();
+entity->setHunterUvShieldTimer(stateMachine, remainingSeconds);
 entity->setHunterUvShieldCharges(-2);
 entity->setHunterUvShieldProgress(energy);
-entity->setHunterUvShield(DLMOD_HUNTER_UV_SHIELD_MODE_PIN, energy * 10.0F);
-entity->setHunterUvShield(DLMOD_HUNTER_UV_SHIELD_MODE_OFF, 0.0F);
 ```
 
-Energy is only consumed or refilled while a Be the Zombie hunter is active, so
-the campaign is unaffected.
-
-## Native Hotkeys
-
-The example registers its toggle through `DlModHotkeyApiV1`. The engine adds the
-hotkey to the game's native input settings page and keeps the game binding as
-the source of truth:
-
-```cpp
-DlModHotkeyDescV1 hotkey{};
-hotkey.structSize = sizeof(hotkey);
-hotkey.abiVersion = DLMOD_HOTKEY_ABI_VERSION;
-hotkey.id = "example.mod.toggle_uv_shield";
-hotkey.displayName = "Toggle UV Shield";
-hotkey.pageTitle = "Example Mod";
-hotkey.defaultKey = DLMOD_HOTKEY_KEY_F7;
-hotkey.device = DLMOD_HOTKEY_DEVICE_INFER;
-hotkey.userData = &state;
-hotkey.callback = &OnShieldHotkey;
-
-hostApi->hotkey->registerHotkey(&hotkey);
-```
-
-Call `registerHotkey` from `onLoad`. The engine creates an `Example Mod` page
-in the game's native key binding settings and adds one row named
-`Toggle UV Shield`. The user can rebind that row in the game; the runtime
-refreshes the binding after the game's input configuration reloads. The
-callback fires on the key-down edge with the action ID allocated from the
-game's free action slots. `getHotkeyKey` returns the current effective binding,
-and `unregisterHotkey` must be called from `onUnload` so the callback never
-points at an unloaded DLL.
+The lifecycle hook is registered through `DlModHunterUvShieldHookDescV1`.
+Its start callback returns zero to block the original shield submission, then
+the mod calls `setHunterUvShieldTimer` to write its own timer directly.
+The hook is unregistered during `onUnload`.
 
 ## Build
 

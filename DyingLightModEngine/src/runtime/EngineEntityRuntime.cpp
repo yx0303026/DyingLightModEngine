@@ -4,6 +4,7 @@
 #include "runtime/EngineEntityBindings.h"
 #include "tracking/EngineHunterTrackingRuntime.h"
 #include "tracking/EngineHunterUvShieldRuntime.h"
+#include "tracking/EngineHunterUvRecoveryRuntime.h"
 
 #include <Windows.h>
 
@@ -1003,7 +1004,11 @@ const DlModEntityApiV1 *EngineEntityRuntime::GetApi() noexcept
 		&UnregisterDamageHook,
 		&PickAimTarget,
 		&ResolveBoneId,
-		&ReadBoneById};
+		&ReadBoneById,
+		&InstallUvRecoveryTracking,
+		&IsUvRecoveryTrackingInstalled,
+		&RegisterHunterUvRecoveryHooks,
+		&UnregisterHunterUvRecoveryHooks};
 #if defined(_M_X64)
 	return EngineEntityBindings::Resolve() != nullptr ? &api : nullptr;
 #else
@@ -1014,6 +1019,7 @@ const DlModEntityApiV1 *EngineEntityRuntime::GetApi() noexcept
 void EngineEntityRuntime::Shutdown() noexcept
 {
 	EngineDamageRuntime::Shutdown();
+	EngineHunterUvRecoveryRuntime::Shutdown();
 	EngineHunterUvShieldRuntime::Shutdown();
 	EngineHunterTrackingRuntime::Shutdown();
 }
@@ -1561,6 +1567,31 @@ DlModResult MODSDK_CALL EngineEntityRuntime::SetHunterUvShieldTimer(
 	float seconds) noexcept
 {
 	return EngineHunterUvShieldRuntime::SetTimer(stateMachine, seconds);
+}
+
+DlModResult MODSDK_CALL EngineEntityRuntime::InstallUvRecoveryTracking() noexcept
+{
+	return EngineHunterUvRecoveryRuntime::Install()
+			   ? DLMOD_RESULT_SUCCESS
+			   : DLMOD_RESULT_UNSUPPORTED_FEATURE;
+}
+
+uint8_t MODSDK_CALL EngineEntityRuntime::IsUvRecoveryTrackingInstalled() noexcept
+{
+	return EngineHunterUvRecoveryRuntime::IsInstalled() ? 1U : 0U;
+}
+
+DlModResult MODSDK_CALL EngineEntityRuntime::RegisterHunterUvRecoveryHooks(
+	const DlModHunterUvRecoveryHookDescV1 *desc) noexcept
+{
+	if (desc == nullptr)
+		return DLMOD_RESULT_INVALID_ARGUMENT;
+	return EngineHunterUvRecoveryRuntime::RegisterHooks(*desc);
+}
+
+DlModResult MODSDK_CALL EngineEntityRuntime::UnregisterHunterUvRecoveryHooks() noexcept
+{
+	return EngineHunterUvRecoveryRuntime::UnregisterHooks();
 }
 
 DlModResult MODSDK_CALL EngineEntityRuntime::InstallDamageTracking() noexcept

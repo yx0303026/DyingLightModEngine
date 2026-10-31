@@ -1,6 +1,5 @@
 #include "sdk/EngineEntityAbi.h"
 #include "sdk/EngineHostAbi.h"
-#include "sdk/EngineHotkeyAbi.h"
 #include "sdk/EngineModLifecycleAbi.h"
 #include "logging/EngineLogger.h"
 
@@ -12,7 +11,7 @@
 
 namespace {
 
-	/* 紫外线护盾改为可开关技能：满能量维持 10 秒，关闭后 15 秒回满，充能次数不再受限。 */
+	/* 示例模组概览：拦截原版紫外线护盾开始事件，使用自己的能量和计时逻辑。 */
 	constexpr float kShieldFullDurationSeconds = 6.0F;
 	constexpr float kShieldFullRechargeSeconds = 20.0F;
 	constexpr std::int32_t kUnlimitedCharges = -2;
@@ -22,13 +21,14 @@ namespace {
 		void* hostContext = nullptr;
 		EngineLogCallback hostLog = nullptr;
 		const DlModEntityApiV1* entity = nullptr;
-		const DlModHotkeyApiV1* hotkey = nullptr;
+		void* stateMachine = nullptr;
 		bool uvShieldAvailable = false;
-		bool shieldEnabled = false;
-		bool shieldHotkeyRegistered = false;
+		bool shieldHooksRegistered = false;
+		bool shieldActive = false;
 		bool depletionLogged = false;
 		bool hudProgressWarningLogged = false;
 		float energy = 1.0F;
+		float remainingSeconds = 0.0F;
 		ULONGLONG lastTickMs = 0;
 	};
 
@@ -48,14 +48,19 @@ namespace {
 	void LogPercent(EngineLogLevel level, const char* format, float ratio)
 	{
 		char buffer[160]{};
-		std::snprintf(buffer, sizeof(buffer), format, static_cast<double>(ratio) * 100.0);
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			format,
+			static_cast<double>(ratio) * 100.0);
 		Log(level, buffer);
 	}
 
 	bool IsHunterActive()
 	{
 		const ExampleModState& state = g_exampleModState;
-		if (state.entity == nullptr || !state.uvShieldAvailable ||
+		if (state.entity == nullptr ||
+			!state.uvShieldAvailable ||
 			state.entity->readHunterUvShield == nullptr) {
 			return false;
 		}
@@ -65,74 +70,140 @@ namespace {
 		return state.entity->readHunterUvShield(&snapshot) == DLMOD_RESULT_SUCCESS;
 	}
 
-	/* 技能开启时用 PIN 把光免疫计时钉在剩余能量对应的秒数上，关闭时强制清零。 */
-	void ApplyShieldState()
+	void SetCustomTimer(ExampleModState& state, float seconds)
 	{
-		ExampleModState& state = g_exampleModState;
-		if (state.entity == nullptr || !state.uvShieldAvailable) {
+		if (state.entity == nullptr ||
+			state.entity->setHunterUvShieldTimer == nullptr ||
+			state.stateMachine == nullptr) {
 			return;
 		}
-		state.entity->setHunterUvShieldCharges(kUnlimitedCharges);
-		if (state.shieldEnabled && state.energy > 0.0F) {
-			state.entity->setHunterUvShield(
-				DLMOD_HUNTER_UV_SHIELD_MODE_PIN,
-				state.energy * kShieldFullDurationSeconds);
+		state.entity->setHunterUvShieldTimer(state.stateMachine, seconds);
+	}
+
+	void UpdateHudProgress(ExampleModState& state)
+	{
+		if (state.entity == nullptr ||
+			state.entity->setHunterUvShieldProgress == nullptr) {
+			return;
 		}
-		else {
-			state.entity->setHunterUvShield(DLMOD_HUNTER_UV_SHIELD_MODE_OFF, 0.0F);
+		if (state.entity->setHunterUvShieldProgress(state.energy) != DLMOD_RESULT_SUCCESS &&
+			!state.hudProgressWarningLogged) {
+			state.hudProgressWarningLogged = true;
+			Log(EngineLogLevel::Warning, "自定义紫外线护盾 HUD 进度不可用。");
 		}
 	}
 
-	void ToggleShield()
+	void BeginCustomShield(
+		ExampleModState& state,
+		void* stateMachine,
+		float sourceDuration)
 	{
-		ExampleModState& state = g_exampleModState;
-		if (state.shieldEnabled) {
-			state.shieldEnabled = false;
-			state.depletionLogged = false;
-			LogPercent(EngineLogLevel::Info, "UV shield disabled (energy %.0f%%).", state.energy);
-			return;
-		}
-		if (state.energy <= 0.0F) {
-			Log(EngineLogLevel::Warning, "UV shield cannot be enabled: energy is empty.");
-			return;
-		}
-		state.shieldEnabled = true;
+		state.stateMachine = stateMachine;
+		state.shieldActive = true;
 		state.depletionLogged = false;
-		LogPercent(EngineLogLevel::Info, "UV shield enabled (energy %.0f%%).", state.energy);
-	}
-
-	void MODSDK_CALL OnShieldHotkey(void* userData, std::uint32_t actionId)
-	{
-		(void)actionId;
-		if (userData != &g_exampleModState) {
+		state.remainingSeconds =
+			(std::min)(kShieldFullDurationSeconds, state.energy * kShieldFullDurationSeconds);
+		if (state.remainingSeconds <= 0.0F) {
+			state.shieldActive = false;
+			state.remainingSeconds = 0.0F;
+			SetCustomTimer(state, 0.0F);
+			Log(EngineLogLevel::Warning, "自定义紫外线护盾能量为空，阻止原版护盾。");
 			return;
 		}
-		ToggleShield();
+
+		state.entity->setHunterUvShieldCharges(kUnlimitedCharges);
+		SetCustomTimer(state, state.remainingSeconds);
+		UpdateHudProgress(state);
+		LogPercent(
+			EngineLogLevel::Info,
+			"自定义紫外线护盾开始，原版逻辑已跳过（能量 %.0f%%，原版时长 %.2fs）。",
+			state.energy);
+		(void)sourceDuration;
 	}
 
-	void UpdateEnergy(float deltaSeconds)
+	uint8_t MODSDK_CALL OnUvShieldStart(
+		void* stateMachine,
+		uint32_t source,
+		float durationSeconds,
+		void* userData)
 	{
-		ExampleModState& state = g_exampleModState;
-		if (state.shieldEnabled) {
-			state.energy -= deltaSeconds / kShieldFullDurationSeconds;
-			if (state.energy <= 0.0F) {
-				state.energy = 0.0F;
-				state.shieldEnabled = false;
-				if (!state.depletionLogged) {
-					state.depletionLogged = true;
-					Log(EngineLogLevel::Info, "UV shield depleted and recharging.");
-				}
+		ExampleModState* state = static_cast<ExampleModState*>(userData);
+		if (state != &g_exampleModState ||
+			state->entity == nullptr ||
+			(source != DLMOD_HUNTER_UV_HOOK_SOURCE_SMOKE &&
+				source != DLMOD_HUNTER_UV_HOOK_SOURCE_GROUND_POUND)) {
+			return 1U;
+		}
+
+		BeginCustomShield(*state, stateMachine, durationSeconds);
+		state->lastTickMs = GetTickCount64();
+		return 0U;
+	}
+
+	void MODSDK_CALL OnUvShieldUpdate(
+		void* stateMachine,
+		uint32_t source,
+		float previousSeconds,
+		float remainingSeconds,
+		void* userData)
+	{
+		ExampleModState* state = static_cast<ExampleModState*>(userData);
+		if (state != &g_exampleModState ||
+			state->stateMachine != stateMachine ||
+			(state->shieldActive && state->remainingSeconds > 0.0F)) {
+			return;
+		}
+		(void)source;
+		(void)previousSeconds;
+		(void)remainingSeconds;
+	}
+
+	void MODSDK_CALL OnUvShieldEnd(
+		void* stateMachine,
+		uint32_t source,
+		void* userData)
+	{
+		ExampleModState* state = static_cast<ExampleModState*>(userData);
+		if (state != &g_exampleModState ||
+			state->stateMachine != stateMachine ||
+			state->remainingSeconds > 0.0F) {
+			return;
+		}
+		state->shieldActive = false;
+		state->remainingSeconds = 0.0F;
+		(void)source;
+	}
+
+	void UpdateCustomShield(ExampleModState& state, float deltaSeconds)
+	{
+		if (!state.shieldActive) {
+			state.energy = (std::min)(
+				1.0F,
+				state.energy + deltaSeconds / kShieldFullRechargeSeconds);
+			return;
+		}
+
+		state.remainingSeconds = (std::max)(
+			0.0F,
+			state.remainingSeconds - deltaSeconds);
+		state.energy = (std::max)(
+			0.0F,
+			state.remainingSeconds / kShieldFullDurationSeconds);
+		SetCustomTimer(state, state.remainingSeconds);
+		if (state.remainingSeconds <= 0.0F) {
+			state.shieldActive = false;
+			if (!state.depletionLogged) {
+				state.depletionLogged = true;
+				Log(EngineLogLevel::Info, "自定义紫外线护盾结束，能量开始恢复。");
 			}
-			return;
 		}
-		state.energy = (std::min)(1.0F, state.energy + deltaSeconds / kShieldFullRechargeSeconds);
 	}
 
 	void MODSDK_CALL OnRenderFrame(void* modContext, void* graphicsContext)
 	{
 		(void)graphicsContext;
 		ExampleModState& state = g_exampleModState;
-		if (modContext != &state) {
+		if (modContext != &state || !state.uvShieldAvailable || !IsHunterActive()) {
 			return;
 		}
 
@@ -144,85 +215,58 @@ namespace {
 		}
 		state.lastTickMs = now;
 
-		/* 只在 BTZ 猎手存在时消耗/恢复能量，避免战役模式空转。 */
-		if (!IsHunterActive()) {
-			return;
-		}
-		UpdateEnergy(deltaSeconds);
-		if (state.entity->setHunterUvShieldProgress(state.energy) != DLMOD_RESULT_SUCCESS &&
-			!state.hudProgressWarningLogged) {
-			state.hudProgressWarningLogged = true;
-			Log(EngineLogLevel::Warning, "UV shield HUD progress hook is unavailable.");
-		}
-		ApplyShieldState();
+		UpdateCustomShield(state, deltaSeconds);
+		UpdateHudProgress(state);
 	}
 
-	DlModResult MODSDK_CALL OnLoad(void* modContext, const DlModHostApiV1* hostApi)
+	DlModResult MODSDK_CALL OnLoad(
+		void* modContext,
+		const DlModHostApiV1* hostApi)
 	{
 		if (modContext != &g_exampleModState ||
 			hostApi == nullptr ||
-			hostApi->structSize < DLMOD_HOST_API_V1_MOUSE_STATE_SIZE ||
+			hostApi->structSize < DLMOD_HOST_API_V1_ENTITY_SIZE ||
 			hostApi->abiVersion != MODSDK_ABI_VERSION ||
-			hostApi->log == nullptr) {
+			hostApi->log == nullptr ||
+			hostApi->entity == nullptr ||
+			hostApi->entity->structSize < DLMOD_ENTITY_API_V1_UV_TIMER_SIZE ||
+			hostApi->entity->installUvShieldTracking == nullptr ||
+			hostApi->entity->registerHunterUvShieldHooks == nullptr ||
+			hostApi->entity->setHunterUvShieldTimer == nullptr) {
 			return DLMOD_RESULT_INVALID_ARGUMENT;
 		}
 
 		ExampleModState& state = g_exampleModState;
 		state.hostContext = hostApi->context;
 		state.hostLog = hostApi->log;
+		state.entity = hostApi->entity;
+		state.energy = 1.0F;
 		state.hostLog(
 			state.hostContext,
 			static_cast<uint32_t>(EngineLogLevel::Info),
-			"Example Mod loaded successfully.");
-		state.energy = 1.0F;
+			"Example Mod 已加载，将接管紫外线护盾逻辑。");
 
-		if (hostApi->structSize >= DLMOD_HOST_API_V1_ENTITY_SIZE &&
-			hostApi->entity != nullptr &&
-			hostApi->entity->structSize >= DLMOD_ENTITY_API_V1_UV_SHIELD_SIZE &&
-			hostApi->entity->installUvShieldTracking != nullptr &&
-			hostApi->entity->setHunterUvShieldProgress != nullptr) {
-			state.entity = hostApi->entity;
-			state.uvShieldAvailable =
-				state.entity->installUvShieldTracking() == DLMOD_RESULT_SUCCESS;
-			if (state.uvShieldAvailable) {
-				Log(EngineLogLevel::Info, "UV shield hooks installed. Press V to toggle.");
-			}
-			else {
-				Log(EngineLogLevel::Warning, "UV shield hooks are unavailable for this game build.");
-			}
-		}
-		else {
-			Log(EngineLogLevel::Warning, "Entity API does not expose UV shield control.");
+		state.uvShieldAvailable =
+			state.entity->installUvShieldTracking() == DLMOD_RESULT_SUCCESS;
+		if (!state.uvShieldAvailable) {
+			Log(EngineLogLevel::Warning, "紫外线护盾钩子不可用，模组不会接管原版逻辑。");
+			return DLMOD_RESULT_SUCCESS;
 		}
 
-		if (hostApi->structSize >= DLMOD_HOST_API_V1_HOTKEY_SIZE &&
-			hostApi->hotkey != nullptr &&
-			hostApi->hotkey->structSize >= DLMOD_HOTKEY_API_V1_SIZE &&
-			hostApi->hotkey->abiVersion == DLMOD_HOTKEY_ABI_VERSION &&
-			hostApi->hotkey->registerHotkey != nullptr) {
-			DlModHotkeyDescV1 hotkey{};
-			hotkey.structSize = sizeof(hotkey);
-			hotkey.abiVersion = DLMOD_HOTKEY_ABI_VERSION;
-			hotkey.id = "example.mod.toggle_uv_shield";
-			hotkey.displayName = "Toggle UV Shield";
-			hotkey.pageTitle = "Example Mod";
-			hotkey.defaultKey = DLMOD_HOTKEY_KEY_F7;
-			hotkey.device = DLMOD_HOTKEY_DEVICE_INFER;
-			hotkey.userData = &state;
-			hotkey.callback = &OnShieldHotkey;
-			if (hostApi->hotkey->registerHotkey(&hotkey) == DLMOD_RESULT_SUCCESS) {
-				state.hotkey = hostApi->hotkey;
-				state.shieldHotkeyRegistered = true;
-				Log(EngineLogLevel::Info,
-					"UV shield hotkey registered in the native input settings (F7 default).");
-			}
-			else {
-				Log(EngineLogLevel::Warning, "UV shield hotkey registration failed.");
-			}
+		DlModHunterUvShieldHookDescV1 hooks{};
+		hooks.structSize = sizeof(hooks);
+		hooks.abiVersion = MODSDK_ABI_VERSION;
+		hooks.userData = &state;
+		hooks.onStart = &OnUvShieldStart;
+		hooks.onUpdate = &OnUvShieldUpdate;
+		hooks.onEnd = &OnUvShieldEnd;
+		if (state.entity->registerHunterUvShieldHooks(&hooks) != DLMOD_RESULT_SUCCESS) {
+			Log(EngineLogLevel::Warning, "紫外线护盾生命周期钩子注册失败。");
+			state.uvShieldAvailable = false;
+			return DLMOD_RESULT_SUCCESS;
 		}
-		else {
-			Log(EngineLogLevel::Warning, "Hotkey API is unavailable; UV shield has no hotkey.");
-		}
+		state.shieldHooksRegistered = true;
+		Log(EngineLogLevel::Info, "紫外线护盾自定义逻辑已启用，无需自定义按键。");
 		return DLMOD_RESULT_SUCCESS;
 	}
 
@@ -233,25 +277,25 @@ namespace {
 		}
 
 		ExampleModState& state = g_exampleModState;
-		if (state.hotkey != nullptr && state.shieldHotkeyRegistered) {
-			state.hotkey->unregisterHotkey("example.mod.toggle_uv_shield");
+		if (state.entity != nullptr && state.shieldHooksRegistered &&
+			state.entity->unregisterHunterUvShieldHooks != nullptr) {
+			state.entity->unregisterHunterUvShieldHooks();
 		}
 		if (state.entity != nullptr && state.uvShieldAvailable) {
+			SetCustomTimer(state, 0.0F);
 			state.entity->setHunterUvShield(DLMOD_HUNTER_UV_SHIELD_MODE_GAME, 0.0F);
 			state.entity->setHunterUvShieldCharges(-1);
 			state.entity->setHunterUvShieldDuration(0.0F);
 			state.entity->setHunterUvShieldProgress(-1.0F);
 		}
-
 		if (state.hostLog != nullptr) {
 			state.hostLog(
 				state.hostContext,
 				static_cast<uint32_t>(EngineLogLevel::Info),
-				"Example Mod unloaded.");
+				"Example Mod 已卸载。");
 		}
 		g_exampleModState = {};
 	}
-
 }
 
 extern "C" DlModResult MODSDK_CALL ModSDK_QueryMod(

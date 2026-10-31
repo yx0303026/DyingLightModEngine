@@ -98,6 +98,10 @@ public:
 	static constexpr std::uintptr_t HunterUvComponentOffset = 0x1348;
 	/* sub_180CE1410：UV 能量的增减入口，猎手 state case 3/6/7 通过它改动组件能量。 */
 	static constexpr std::uintptr_t HunterUvDrainSiteRva = 0xCE1410;
+	/* sub_180DD8620 的 UvHeal_Anticipation 状态写入点。 */
+	static constexpr std::uintptr_t HunterUvRecoveryStartSiteRva = 0xDD8F27;
+	/* sub_180DDDC10 的 UvHeal_Recovery 状态写入点。 */
+	static constexpr std::uintptr_t HunterUvRecoveryCompleteSiteRva = 0xDDDDDD;
 	/* 写入 + 0xA4 光免疫计时的四处指令（均为 movss [rbx+0A4h]），钩子按点安装：
 	   主更新 sub_180DD9120：timer = max(timer - dt, 0)，每帧递减。 */
 	static constexpr std::uintptr_t HunterUvShieldUpdateSiteRva = 0xDD98BD;
@@ -106,11 +110,11 @@ public:
 	/* 防御烟雾 sub_180DD8620：timer = params[734]，并把 +0xA8 置 1。 */
 	static constexpr std::uintptr_t HunterUvShieldSmokeSiteRva = 0xDD87A2;
 	/* 烟雾开始提交被拒绝时，跳过计时器写入和 HUD 标记后的继续地址。 */
-	static constexpr std::uintptr_t HunterUvShieldSmokeAfterFlagRva = 0xDD87B1;
+	static constexpr std::uintptr_t HunterUvShieldSmokeAfterFlagRva = 0xDD8E48;
 	/* 捶地 sub_180DDD4C0：timer = max(timer, params[735])，并把 +0xA8 置 0。 */
 	static constexpr std::uintptr_t HunterUvShieldGroundPoundSiteRva = 0xDDD5F9;
 	/* 捶地开始提交被拒绝时，跳过计时器写入和 HUD 标记后的继续地址。 */
-	static constexpr std::uintptr_t HunterUvShieldGroundPoundAfterFlagRva = 0xDDD608;
+	static constexpr std::uintptr_t HunterUvShieldGroundPoundAfterFlagRva = 0xDDD7BD;
 	/* HudZombieAbilities 容器更新入口：容器 + 0x68 为能力项数量，+ 0x60 + 4 * sizeof(void*)
 	   处缓存 UVBlock（索引 4）能力项指针。游戏每帧最多刷新 5 个猎手能力项。 */
 	static constexpr std::uintptr_t HunterUvShieldHudContainerSiteRva = 0x5C66C0;

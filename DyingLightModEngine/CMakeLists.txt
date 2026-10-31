@@ -33,6 +33,7 @@ function(dlmod_make_min_hook_available)
 endfunction()
 
 dlmod_make_min_hook_available()
+add_subdirectory("finject")
 
 add_library(DearImGui STATIC
     "${dearimgui_SOURCE_DIR}/imgui.cpp"
@@ -104,6 +105,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     set(DLMOD_ENTITY_TRACKING_ASM
         "src/tracking/EngineHunterTracking.asm"
         "src/tracking/EngineHunterUvShield.asm"
+        "src/tracking/EngineHunterUvRecovery.asm"
         "src/runtime/entity/damage/EngineDamage.asm")
 elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
     set(DLMOD_ENGINE_DEF "${CMAKE_CURRENT_LIST_DIR}/exports/x86.def")
@@ -143,6 +145,7 @@ add_library(DyingLightModEngine SHARED
     "src/runtime/ui/EngineUiRuntime.cpp"
     "src/tracking/EngineHunterTrackingRuntime.cpp"
     "src/tracking/EngineHunterUvShieldRuntime.cpp"
+    "src/tracking/EngineHunterUvRecoveryRuntime.cpp"
     "${DLMOD_ENTITY_TRACKING_ASM}"
     "include/core/EngineHost.h"
     "include/sdk/EngineAbiTypes.h"
@@ -185,9 +188,11 @@ add_library(DyingLightModEngine SHARED
     "include/runtime/ui/EngineUiRuntime.h"
     "include/tracking/EngineHunterTrackingRuntime.h"
     "include/tracking/EngineHunterUvShieldRuntime.h"
+    "include/tracking/EngineHunterUvRecoveryRuntime.h"
     "include/tracking/EngineHunterMotionTracker.h"
     "src/tracking/EngineHunterMotionTracker.cpp"
     "${DLMOD_ENGINE_DEF}"
+    include/runtime/entity/skill/EngineEntitySkillBase.h
 )
 
 target_compile_features(DyingLightModEngine PRIVATE cxx_std_20)

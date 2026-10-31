@@ -76,6 +76,7 @@ namespace
 	std::atomic<float> g_hudProgressRatio{-1.0F};
 	std::atomic<void *> g_hudShieldAbility{nullptr};
 	std::atomic<void *> g_hudContainer{nullptr};
+	std::atomic<void *> g_customTakeoverStateMachine{nullptr};
 	std::atomic_bool g_hudContainerLogged = false;
 	std::atomic_uint32_t g_hudAbilityLogCount{0};
 	std::atomic_bool g_installed = false;
@@ -104,11 +105,17 @@ namespace
 			return true;
 		try
 		{
-			return hooks.onStart(
+			const bool allowOriginal = hooks.onStart(
 				stateMachine,
 				source,
 				durationSeconds,
 				hooks.userData) != 0;
+			if (!allowOriginal) {
+				g_customTakeoverStateMachine.store(
+					stateMachine,
+					std::memory_order_release);
+			}
+			return allowOriginal;
 		}
 		catch (...)
 		{
@@ -151,6 +158,12 @@ namespace
 		try
 		{
 			hooks.onEnd(stateMachine, source, hooks.userData);
+			if (g_customTakeoverStateMachine.load(std::memory_order_acquire) ==
+				stateMachine) {
+				g_customTakeoverStateMachine.store(
+					nullptr,
+					std::memory_order_release);
+			}
 		}
 		catch (...)
 		{
@@ -323,6 +336,14 @@ namespace
 			stateMachine,
 			EngineEntityBindings::ZombieStateMachineShieldSecondsOffset,
 			previous);
+		if (g_customTakeoverStateMachine.load(std::memory_order_acquire) ==
+			stateMachine) {
+			InvokeUpdateHook(stateMachine, source, previous, previous);
+			if (previous > 0.0F) {
+				RaiseShieldFlag(stateMachine);
+			}
+			return previous;
+		}
 		const float result = ApplyTimerOverride(value);
 		InvokeUpdateHook(stateMachine, source, previous, result);
 		if (previous > 0.0F && result <= 0.0F)
@@ -411,6 +432,47 @@ namespace
 		}
 	}
 
+	void RefreshHunterUvShieldHudAbility() noexcept
+	{
+		void *container = g_hudContainer.load(std::memory_order_acquire);
+		if (container == nullptr)
+			return;
+		std::uint32_t count = 0;
+		if (!ReadField(container, 0x68, count) || count <= 4)
+			return;
+		void *ability = nullptr;
+		if (ReadField(container, 0x60 + 4 * sizeof(void *), ability) &&
+			ability != nullptr) {
+			g_hudShieldAbility.store(ability, std::memory_order_release);
+		}
+	}
+
+	bool IsHunterUvShieldHudAbility(void *ability) noexcept
+	{
+		if (ability == nullptr)
+			return false;
+		if (ability == g_hudShieldAbility.load(std::memory_order_acquire))
+			return true;
+
+		void *container = g_hudContainer.load(std::memory_order_acquire);
+		if (container == nullptr)
+			return false;
+		std::uint32_t count = 0;
+		if (!ReadField(container, 0x68, count) || count <= 4)
+			return false;
+
+		void *candidate = nullptr;
+		if (!ReadField(
+				container,
+				0x60 + 4 * sizeof(void *),
+				candidate) ||
+			candidate != ability) {
+			return false;
+		}
+		g_hudShieldAbility.store(ability, std::memory_order_release);
+		return true;
+	}
+
 	void SetHunterUvShieldHudNumberVisible(void *ability, bool visible) noexcept
 	{
 		void *text = nullptr;
@@ -477,6 +539,23 @@ extern "C" float EngineEntity_OnHunterUvShieldClientTimer(
 	RecordObservation(stateMachine, value, false);
 	PinCharges(stateMachine);
 	/* 倍率只作用于主更新路径，避免同一帧被两条路径各缩放一次。 */
+	if (g_customTakeoverStateMachine.load(std::memory_order_acquire) ==
+		stateMachine) {
+		float takeoverSeconds = 0.0F;
+		ReadField(
+			stateMachine,
+			EngineEntityBindings::ZombieStateMachineShieldSecondsOffset,
+			takeoverSeconds);
+		InvokeUpdateHook(
+			stateMachine,
+			DLMOD_HUNTER_UV_HOOK_SOURCE_CLIENT_UPDATE,
+			takeoverSeconds,
+			takeoverSeconds);
+		if (takeoverSeconds > 0.0F) {
+			RaiseShieldFlag(stateMachine);
+		}
+		return takeoverSeconds;
+	}
 	const std::uint32_t mode = g_mode.load(std::memory_order_acquire);
 	float result = value;
 	if (mode == DLMOD_HUNTER_UV_SHIELD_MODE_OFF)
@@ -574,12 +653,11 @@ extern "C" void __fastcall EngineEntity_OnHunterUvShieldHudAbility(
 		return;
 
 	const float ratio = g_hudProgressRatio.load(std::memory_order_acquire);
+	RefreshHunterUvShieldHudAbility();
 	const bool hasRatio = std::isfinite(ratio) && ratio >= 0.0F && ratio <= 1.0F;
 	std::int32_t displayedCharges = 0;
 	ReadField(data, 0x00, displayedCharges);
-	bool isShieldAbility =
-		ability != nullptr &&
-		ability == g_hudShieldAbility.load(std::memory_order_acquire);
+	bool isShieldAbility = IsHunterUvShieldHudAbility(ability);
 	/* 无限充能哨兵是 -1；用它作为兜底识别，避免能力顺序变化导致抓错项。 */
 	if (!isShieldAbility && hasRatio && displayedCharges < 0)
 	{
@@ -896,6 +974,7 @@ void EngineHunterUvShieldRuntime::Shutdown() noexcept
 	g_hudProgressRatio.store(-1.0F, std::memory_order_release);
 	g_hudShieldAbility.store(nullptr, std::memory_order_release);
 	g_hudContainer.store(nullptr, std::memory_order_release);
+	g_customTakeoverStateMachine.store(nullptr, std::memory_order_release);
 	g_hudContainerLogged.store(false, std::memory_order_release);
 	g_hudAbilityLogCount.store(0, std::memory_order_release);
 	AcquireSRWLockExclusive(&g_hookStateLock);
